@@ -1,0 +1,2204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K8s Circuit Board — Learn Kubernetes Visually</title>
+<style>
+/* =====================================================================
+   STYLES
+   ===================================================================== */
+:root {
+  /* Kubernetes palette: logo blue #326ce5 on deep navy */
+  --bg:#060a17; --pcb:#0a1330; --panel:#0d1632; --panel2:#111d3f; --line:#1c2a52; --line2:#2a3d72;
+  --k8s:#326ce5; --k8s2:#5b8def; --k8s3:#9bbcff; --glow:#326ce566;
+  --txt:#e4ebff; --dim:#8a9bc4; --mute:#5a6a93;
+  --green:#3ddc97; --blue:#4fc3ff; --amber:#ffb347; --red:#ff5d6c; --violet:#a78bfa;
+  --ui:"Inter","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  --mono:"JetBrains Mono","Fira Code",ui-monospace,Menlo,Consolas,monospace;
+  --r:12px;
+}
+* { box-sizing:border-box; }
+html, body { height:100%; }
+body { margin:0; color:var(--txt); font-family:var(--mono); display:flex; flex-direction:column; overflow:hidden;
+  background:radial-gradient(1100px 500px at 15% -10%, #1a2c63 0%, transparent 60%), radial-gradient(900px 500px at 110% 110%, #14214a 0%, transparent 60%), var(--bg); }
+::-webkit-scrollbar { width:10px; height:10px; }
+::-webkit-scrollbar-thumb { background:#24366b; border-radius:10px; border:2px solid transparent; background-clip:padding-box; }
+::-webkit-scrollbar-track { background:transparent; }
+
+/* header */
+header { display:flex; align-items:center; gap:14px; padding:10px 18px; flex-wrap:wrap; font-family:var(--ui);
+  background:linear-gradient(180deg,#101c40ee,#0a1229ee); border-bottom:1px solid var(--line); box-shadow:0 6px 24px #0009; position:relative; z-index:2; }
+.brand { display:flex; align-items:center; gap:11px; margin-right:4px; }
+.brand svg { width:36px; height:36px; filter:drop-shadow(0 0 8px var(--glow)); animation:spin 30s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.brand h1 { margin:0; font-size:16px; font-weight:700; letter-spacing:.3px; color:#fff; line-height:1.1; }
+.brand h1 span { color:var(--k8s2); }
+.brand small { display:block; font-size:10.5px; color:var(--dim); font-weight:500; }
+.stats { display:flex; gap:6px; flex-wrap:wrap; }
+.stat { display:flex; align-items:center; gap:7px; padding:5px 11px; border-radius:999px; background:#0b1430; border:1px solid var(--line); font-size:11.5px; color:var(--dim); white-space:nowrap; }
+.stat b { color:#fff; font-family:var(--mono); font-weight:600; }
+.stat i { width:7px; height:7px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor; }
+.sep { flex:1; }
+.grp { display:flex; gap:6px; align-items:center; }
+.seg { display:flex; background:#0a1330; border:1px solid var(--line); border-radius:999px; padding:3px; gap:2px; }
+.seg button { border:0; background:transparent; border-radius:999px; padding:5px 12px; }
+.seg button:hover { background:#18264f; }
+.seg button.on { background:var(--k8s); color:#fff; box-shadow:0 2px 10px var(--glow); }
+.seg-label { font-size:10px; color:var(--mute); letter-spacing:1.3px; text-transform:uppercase; font-weight:700; margin-left:4px; }
+button { font-family:var(--ui); font-size:12.5px; font-weight:500; color:var(--txt); background:#132049; border:1px solid var(--line2); border-radius:8px;
+  padding:6px 12px; cursor:pointer; transition:background .15s, border-color .15s, box-shadow .15s, transform .05s; display:inline-flex; align-items:center; gap:6px; }
+button:hover { background:#1a2b60; border-color:var(--k8s2); }
+button:active { transform:translateY(1px); }
+button:disabled { opacity:.4; cursor:default; }
+button.primary { background:linear-gradient(180deg,#3d7af2,#2a5bd0); border-color:#4a82f0; color:#fff; box-shadow:0 2px 14px var(--glow); }
+button.primary:hover { background:linear-gradient(180deg,#4b87ff,#326ce5); }
+button.warn { background:linear-gradient(180deg,#3a1522,#280f18); border-color:#7a2c3a; color:#ffc7ce; }
+button.warn:hover { border-color:var(--red); box-shadow:0 0 14px #ff5d6c44; }
+button.ghost { background:transparent; border-color:transparent; color:var(--dim); }
+button.ghost:hover { background:#16234a; color:#fff; border-color:var(--line2); }
+button.on { background:var(--k8s); border-color:var(--k8s2); color:#fff; }
+
+/* layout: cards */
+main { flex:1; display:flex; gap:14px; padding:14px; min-height:0; }
+.card { background:linear-gradient(180deg,#0f1938f2,#0b142ef2); border:1px solid var(--line); border-radius:var(--r); box-shadow:0 10px 30px #0007, inset 0 1px 0 #ffffff08; overflow:hidden; }
+.card-head { display:flex; align-items:center; gap:10px; padding:9px 14px; border-bottom:1px solid var(--line); font-family:var(--ui); background:#0d1734; flex-wrap:wrap; }
+.card-head .ttl { font-size:12.5px; font-weight:600; color:#fff; display:flex; align-items:center; gap:8px; }
+.card-head .ttl small { color:var(--mute); font-weight:500; }
+.live { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 0 0 #3ddc9788; animation:ping 1.8s infinite; }
+@keyframes ping { 0% { box-shadow:0 0 0 0 #3ddc9788; } 80%,100% { box-shadow:0 0 0 8px #3ddc9700; } }
+#boardCard { flex:1; display:flex; flex-direction:column; min-width:0; }
+#boardWrap { flex:1; overflow:auto; background:var(--pcb); position:relative; }
+#svg { width:100%; min-width:760px; display:block; }
+aside { width:480px; display:flex; flex-direction:column; gap:14px; min-height:0; }
+#panel { flex:1; display:flex; flex-direction:column; min-height:0; }
+.legend { display:flex; flex-wrap:wrap; gap:12px; font-size:11px; color:var(--dim); margin-left:auto; font-family:var(--ui); }
+.legend span { display:flex; align-items:center; gap:5px; }
+.legend i { display:inline-block; width:8px; height:8px; border-radius:50%; box-shadow:0 0 8px currentColor; }
+
+/* lesson card */
+#lesson { padding:12px 14px; font-size:12px; line-height:1.55; max-height:42%; overflow:auto; font-family:var(--ui);
+  background:linear-gradient(135deg,#17306e,#0f1d44); border-color:#2f4f9e; }
+#lesson .lh { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+#lesson .lh b { color:#fff; flex:1; font-size:13px; }
+#lesson .lh span { color:var(--k8s3); font-size:11px; background:#0b1a40; padding:2px 8px; border-radius:999px; }
+#lesson button { padding:3px 10px; }
+#lWhy { margin-top:10px; padding:10px; border:1px solid #2f6e5a; border-radius:8px; background:#0c2a2a; }
+#lWhy b { color:var(--green); }
+#lesson .lf { display:flex; gap:6px; justify-content:flex-end; margin-top:10px; }
+code.try { font-family:var(--mono); color:#ffd08a; cursor:pointer; background:#0a1430; border:1px solid #2a3d72; padding:1px 6px; border-radius:5px; font-size:11.5px; display:inline-block; margin:2px 0; }
+code.try:hover { background:#16245a; border-color:var(--k8s2); }
+
+/* tabs */
+#tabs { display:flex; background:#0a1330; border:1px solid var(--line); border-radius:999px; padding:3px; gap:2px; }
+#tabs button { border:0; border-radius:999px; background:transparent; color:var(--dim); padding:5px 12px; font-size:12px; }
+#tabs button.on { color:#fff; background:var(--k8s); box-shadow:0 2px 10px var(--glow); }
+.pane { flex:1; overflow:auto; padding:12px 14px; min-height:0; font-size:12px; }
+.hidden { display:none !important; }
+#explainTitle { color:var(--k8s3); margin-bottom:10px; word-break:break-all; font-size:12px; padding:7px 10px; background:#0a1330; border-left:3px solid var(--k8s); border-radius:6px; }
+#steps { list-style:none; counter-reset:s; padding:0; margin:0; line-height:1.5; font-family:var(--ui); font-size:12.5px; }
+#steps li { counter-increment:s; position:relative; margin:0 0 6px; padding:7px 10px 7px 38px; color:#b8c6ea; border-radius:8px; border:1px solid transparent; transition:background .2s; }
+#steps li::before { content:counter(s); position:absolute; left:9px; top:7px; width:20px; height:20px; border-radius:50%; background:#18264f; color:var(--dim);
+  font:600 10px var(--mono); display:grid; place-items:center; }
+#steps li.active { color:#fff; background:#16275a; border-color:#2f4f9e; box-shadow:0 0 18px #326ce522; }
+#steps li.active::before { background:var(--k8s); color:#fff; box-shadow:0 0 10px var(--glow); }
+#steps li.pending { color:#56658e; }
+#steps code { font-family:var(--mono); color:#ffd08a; font-size:11.5px; }
+#steps b { color:#fff; }
+#events table { width:100%; border-collapse:collapse; font-size:11px; }
+#events td, #events th { text-align:left; padding:5px 6px; border-bottom:1px solid #18244a; vertical-align:top; }
+#events th { color:var(--dim); font:600 10.5px var(--ui); letter-spacing:.6px; position:sticky; top:0; background:#0d1734; }
+#events tr:hover td { background:#111e44; }
+#events tr.Warning td { color:#ffb0b8; }
+
+/* terminal */
+#term { height:42%; display:flex; flex-direction:column; background:#050915; }
+.term-bar { display:flex; align-items:center; gap:10px; padding:8px 12px; background:#0c1530; border-bottom:1px solid var(--line); font:500 11.5px var(--ui); color:var(--dim); }
+.dots { display:flex; gap:6px; } .dots i { width:11px; height:11px; border-radius:50%; display:block; }
+.dots i:nth-child(1) { background:#ff5f57; } .dots i:nth-child(2) { background:#febc2e; } .dots i:nth-child(3) { background:#28c840; }
+.term-bar .ctx { color:var(--k8s3); font-family:var(--mono); }
+#out { flex:1; overflow:auto; padding:10px 12px; font-size:12px; white-space:pre-wrap; word-break:break-word; line-height:1.45; }
+#out .in { color:var(--k8s3); } #out .err { color:#ff8592; } #out .info { color:#93a5d1; } #out .ok { color:var(--green); } #out .hint { color:var(--amber); }
+#inRow { display:flex; border-top:1px solid var(--line); padding:9px 12px; align-items:center; background:#070d20; }
+#inRow span { color:var(--k8s2); margin-right:8px; font-weight:700; }
+#cmd { flex:1; background:transparent; border:0; outline:0; color:#fff; font:inherit; font-size:13px; caret-color:var(--k8s2); }
+#cmd::placeholder { color:#3b4a75; }
+#busy { color:var(--amber); font-size:11px; margin-left:auto; }
+
+/* tooltip */
+#tip { position:fixed; pointer-events:none; z-index:30; max-width:330px; background:#0b1430f2; backdrop-filter:blur(8px); border:1px solid var(--line2); border-radius:10px;
+  padding:10px 12px; font:12px/1.5 var(--ui); box-shadow:0 10px 30px #000a, 0 0 0 1px #326ce522; }
+#tip b { color:#fff; } #tip .st { color:#ffd08a; display:block; margin-top:6px; font-family:var(--mono); font-size:11px; padding-top:6px; border-top:1px solid var(--line); }
+
+/* modal */
+#modal { position:fixed; inset:0; background:#030712b3; backdrop-filter:blur(6px); z-index:20; display:flex; align-items:center; justify-content:center; padding:20px; }
+#modal .card { width:min(780px,100%); max-height:90vh; display:flex; flex-direction:column; box-shadow:0 30px 80px #000c, 0 0 0 1px #326ce533; }
+#modal .ch { display:flex; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); background:#0d1734; }
+#modal .ch b { flex:1; color:#fff; font:600 14px var(--ui); }
+#mBody { overflow:auto; padding:14px 16px; font:12.5px/1.55 var(--ui); }
+#mBody h4 { margin:14px 0 6px; color:var(--k8s3); font:700 10.5px var(--ui); letter-spacing:1.4px; }
+#mBody pre { background:#060b1c; border:1px solid var(--line); padding:10px; border-radius:8px; overflow:auto; margin:0; font:11.5px/1.45 var(--mono); color:#cdd8f7; }
+#mBody a { color:var(--k8s3); cursor:pointer; text-decoration:none; border-bottom:1px dotted var(--k8s2); }
+#mBody a:hover { color:#fff; }
+#mBody textarea { width:100%; height:340px; background:#060b1c; color:#e0e8ff; border:1px solid var(--line2); border-radius:8px; font:12px/1.5 var(--mono); padding:10px; resize:vertical; outline:none; }
+#mBody textarea:focus { border-color:var(--k8s2); box-shadow:0 0 0 3px #326ce533; }
+#mBody select { background:#132049; color:var(--txt); border:1px solid var(--line2); border-radius:6px; font:inherit; padding:4px 8px; }
+#mBody .lessonItem { padding:10px 12px; border:1px solid var(--line); border-radius:10px; margin-bottom:8px; cursor:pointer; background:#0c1531; transition:all .15s; }
+#mBody .lessonItem:hover { background:#14234f; border-color:var(--k8s2); transform:translateX(2px); }
+#mFoot { padding:12px 16px; border-top:1px solid var(--line); display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; background:#0b1430; }
+
+/* svg board */
+#svg text { font-family:var(--ui); }
+.silk { fill:#3a5296; font-size:11px; letter-spacing:3px; font-weight:700; }
+.trace { fill:none; stroke:#3d63c9; stroke-width:3; opacity:.42; stroke-linejoin:round; }
+.trace.thin { stroke-width:1.5; opacity:.28; }
+.ptrace { fill:none; stroke-width:4; opacity:.9; filter:url(#glow); stroke-linejoin:round; }
+.ptrace.lite { stroke-width:1.5; opacity:.35; filter:none; }
+.chip { cursor:pointer; }
+.chip rect.body { fill:url(#chipGrad); stroke:#2a3d72; stroke-width:1.2; transition:stroke .2s; }
+.chip:hover rect.body { stroke:var(--k8s2); }
+.chip text { fill:#eef3ff; font-size:12px; font-weight:600; text-anchor:middle; pointer-events:none; }
+.chip text.sub { fill:#7f91bd; font-size:8px; letter-spacing:1.3px; font-weight:600; }
+.chip .pin { fill:#6f80ab; }
+.hot rect.body, .hot > rect { stroke:#9bbcff !important; stroke-width:2.5 !important; filter:url(#glow); }
+.node rect.frame { fill:url(#nodeGrad); stroke:#2b4384; stroke-width:1.5; cursor:pointer; }
+.node rect.band { fill:#152650; pointer-events:none; }
+.node.cordon rect.frame { stroke:var(--amber); stroke-dasharray:8 4; }
+.node.down rect.frame { stroke:var(--red); stroke-dasharray:6 4; fill:#1c0f1c; }
+.node.down rect.band { fill:#3a1525; }
+.node.hot rect.frame { stroke:var(--red) !important; }
+.node text { fill:#dbe5ff; font-size:12px; font-weight:600; pointer-events:none; }
+.bar-bg { fill:#081026; stroke:#22346a; }
+.slot { fill:#0b16351a; stroke:#22356b; stroke-dasharray:3 3; }
+.pod { cursor:pointer; }
+.pod text { font-size:9.5px; font-weight:600; text-anchor:middle; fill:#fff; pointer-events:none; }
+.pod text.sub { fill:#ffffffa0; font-size:8.5px; font-weight:500; }
+.pod:hover > rect { stroke-width:2.5; }
+.led.ok { fill:var(--green); filter:url(#glow); }
+.led.boot { fill:#ffd23f; filter:url(#glow); animation:blink .45s infinite alternate; }
+.led.err { fill:#ff3b4f; filter:url(#glow); animation:blink .9s infinite alternate; }
+.led.term { fill:#ff5d6c; animation:blink .25s infinite alternate; }
+.led.idle { fill:#56628a; }
+@keyframes blink { from { opacity:1; } to { opacity:.12; } }
+.box > rect { fill:#0a1433d9; stroke:#2b4384; stroke-dasharray:4 3; }
+.box text { fill:#9db4ea; font-size:10.5px; font-weight:700; letter-spacing:1.5px; }
+.row { cursor:pointer; }
+.row rect { fill:#111e44; stroke:#253a78; }
+.row:hover rect { stroke:var(--k8s2); }
+.row text { font-size:10.5px; fill:#d6e1ff; font-weight:500; pointer-events:none; }
+
+/* responsive */
+@media (max-width: 1100px) {
+  main { flex-direction:column; overflow:auto; padding:10px; gap:10px; }
+  #boardCard { flex:none; height:68vh; min-height:340px; }
+  aside { width:100%; flex:none; }
+  .pane { max-height:36vh; }
+  #term { height:40vh; flex:none; }
+  body { overflow:auto; }
+  .stats { order:5; width:100%; }
+}
+@media (max-width: 640px) {
+  header { padding:8px 10px; gap:8px; }
+  .brand small, .legend { display:none; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="k8s" viewBox="0 0 100 100">
+    <polygon points="50,4 85.96,21.32 94.85,60.24 69.96,91.45 30.04,91.45 5.15,60.24 14.04,21.32" fill="#326ce5" stroke="#326ce5" stroke-width="7" stroke-linejoin="round"/>
+    <g stroke="#fff" stroke-linecap="round" fill="none">
+      <circle cx="50" cy="52" r="19" stroke-width="5"/>
+      <path stroke-width="4.5" d="M50 52V19M50 52L76 31M50 52L82 59M50 52L64 81M50 52L36 81M50 52L18 59M50 52L24 31"/>
+    </g>
+    <circle cx="50" cy="52" r="6" fill="#fff"/>
+  </symbol>
+</svg>
+<header>
+  <div class="brand">
+    <svg><use href="#k8s"/></svg>
+    <div><h1>Kube<span>Circuit</span></h1><small>Learn Kubernetes by watching it think</small></div>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="sep"></div>
+  <div class="grp">
+    <button id="bLessons" class="primary">📘 Lessons</button>
+    <button id="bExplain">⟲ Explain this</button>
+    <button id="bBreak" class="warn">⚡ Break it</button>
+  </div>
+  <div class="grp">
+    <span class="seg-label">Nodes</span>
+    <div class="seg"><button id="bAdd" title="Add a worker node">＋</button><button id="bRm" title="Kill & remove the last worker node">－</button></div>
+    <button id="bReset" class="ghost" title="Reset the cluster">↺ Reset</button>
+  </div>
+  <div class="grp">
+    <span class="seg-label">Speed</span>
+    <div class="seg"><button data-s="2.5">Slow</button><button data-s="1" class="on">Normal</button><button data-s="0.35">Fast</button></div>
+  </div>
+</header>
+<main>
+  <section id="boardCard" class="card">
+    <div class="card-head">
+      <div class="ttl"><span class="live"></span>Cluster topology <small>· click any component · hover for details</small></div>
+      <div class="legend">
+        <span><i style="color:#4fc3ff;background:#4fc3ff"></i>request</span>
+        <span><i style="color:#ffb347;background:#ffb347"></i>etcd r/w</span>
+        <span><i style="color:#a78bfa;background:#a78bfa"></i>watch</span>
+        <span><i style="color:#3ddc97;background:#3ddc97"></i>status</span>
+        <span><i style="color:#ff5d6c;background:#ff5d6c"></i>delete</span>
+        <span><i style="color:#ffe66d;background:#ffe66d"></i>traffic</span>
+      </div>
+    </div>
+    <div id="boardWrap">
+      <svg id="svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+            <path d="M24 0 L0 0 0 24" fill="none" stroke="#111d42" stroke-width="1"/>
+            <circle cx="0" cy="0" r="1.2" fill="#1f3270"/>
+          </pattern>
+          <linearGradient id="chipGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2856"/><stop offset="1" stop-color="#0d1533"/></linearGradient>
+          <linearGradient id="nodeGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f1c44"/><stop offset="1" stop-color="#0a1330"/></linearGradient>
+          <radialGradient id="boardGlow" cx="50%" cy="0%" r="75%"><stop offset="0" stop-color="#326ce5" stop-opacity=".22"/><stop offset="1" stop-color="#326ce5" stop-opacity="0"/></radialGradient>
+          <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="2.6" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <g id="board"></g>
+        <g id="fx"></g>
+      </svg>
+    </div>
+  </section>
+  <aside>
+    <div id="lesson" class="card hidden">
+      <div class="lh"><b id="lTitle"></b><span id="lProg"></span><button id="lClose" class="ghost" title="Close lesson">✕</button></div>
+      <div id="lTask"></div>
+      <div id="lWhy" class="hidden"></div>
+      <div class="lf"><button id="lPrev">‹ Prev</button><button id="lNext" class="primary">Next ›</button></div>
+    </div>
+    <section id="panel" class="card">
+      <div class="card-head"><div id="tabs"><button data-tab="explain" class="on">What just happened</button><button data-tab="events">Events</button></div></div>
+      <div id="explain" class="pane">
+        <div id="explainTitle">Type a command below — try <b>help</b>, or open 📘 Lessons.</div>
+        <ol id="steps"></ol>
+      </div>
+      <div id="events" class="pane hidden"></div>
+    </section>
+    <section id="term" class="card">
+      <div class="term-bar"><span class="dots"><i></i><i></i><i></i></span><span>kubectl</span><span class="ctx">ctx: kube-circuit · ns: default</span><span id="busy"></span></div>
+      <div id="out"></div>
+      <div id="inRow"><span>❯</span><input id="cmd" autocomplete="off" spellcheck="false" placeholder="kubectl create deployment web --image=nginx --replicas=3"></div>
+    </section>
+  </aside>
+</main>
+<div id="tip" class="hidden"></div>
+<div id="modal" class="hidden"><div class="card"><div class="ch"><b id="mTitle"></b><button id="mClose">✕</button></div><div id="mBody"></div><div id="mFoot"></div></div></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   1. CONSTANTS & HELPERS
+   ===================================================================== */
+const NS = 'http://www.w3.org/2000/svg';
+const C = { req:'#4fc3ff', write:'#ffb347', watch:'#a78bfa', ok:'#3ddc97', del:'#ff5d6c', traffic:'#ffe66d', beat:'#5b8def' };
+const W = 1200, BUS_Y = 338;
+const NODE_CPU = 2000, NODE_MEM = 4096, DEF_CPU = 250, DEF_MEM = 256, MAX_NODES = 9, NODE_SLOTS = 12;
+const K8S_VERSION = 'v1.30.2';
+const REV_COLORS = ['#4fc3ff','#ff9f43','#a78bfa','#3ddc97','#ff6bcb','#ffe66d','#6be4ff'];
+// Images matching this pattern "don't exist in the registry" -> ErrImagePull / ImagePullBackOff.
+const BAD_IMAGE = /ngnix|nignx|nginxx|doesnotexist|does-not-exist|nonexistent|invalid|typo|:latst|:lastest/i;
+const DNS1123 = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
+const IMAGE_RE = /^[a-z0-9][a-z0-9._\-\/]*(:[A-Za-z0-9._\-]+)?$/;
+
+let SPEED = 1;
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const now = () => Date.now();
+const clone = o => JSON.parse(JSON.stringify(o));
+const rand = (n, al = 'bcdfghjklmnpqrstvwxz2456789') => Array.from({ length:n }, () => al[Math.floor(Math.random() * al.length)]).join('');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const iso = t => new Date(t).toISOString().replace(/\.\d+Z$/, 'Z');
+const selStr = sel => Object.entries(sel).map(([k, v]) => `${k}=${v}`).join(',');
+const matches = (sel, labels) => Object.keys(sel).length > 0 && Object.entries(sel).every(([k, v]) => labels[k] === v);
+const imageOK = img => !BAD_IMAGE.test(img);
+const imageBase = img => img.split('/').pop().split(':')[0].split('@')[0];
+const imageTag = img => img.includes(':') ? img.split(':').pop() : 'latest';
+function age(t) {
+  const s = Math.max(0, Math.floor((now() - t) / 1000));
+  if (s < 120) return s + 's';
+  const m = Math.floor(s / 60);
+  if (m < 10) return `${m}m${s % 60}s`;
+  return m < 120 ? m + 'm' : Math.floor(m / 60) + 'h';
+}
+function hashStr(s) {
+  const al = 'bcdfghjklmnpqrstvwxz2456789'; let out = '';
+  for (let k = 0; k < 10; k++) { let h = 2166136261 ^ k; for (const c of s + k) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } out += al[(h >>> 0) % al.length]; }
+  return out;
+}
+const parseCPU = v => v == null ? DEF_CPU : String(v).endsWith('m') ? parseInt(v, 10) : Math.round(parseFloat(v) * 1000);
+function parseMem(v) {
+  if (v == null) return DEF_MEM;
+  const m = String(v).match(/^([\d.]+)\s*(Ki|Mi|Gi|K|M|G)?$/);
+  if (!m) return NaN;
+  const n = +m[1], f = { Ki:1 / 1024, Mi:1, Gi:1024, K:1 / 1048.576, M:1 / 1.048576, G:953.674 }[m[2]];
+  return Math.round(f ? n * f : n / 1048576);
+}
+function levenshtein(a, b) {
+  const d = Array.from({ length:a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+
+/* =====================================================================
+   2. CLUSTER STATE (the "etcd" of this simulator)
+   ===================================================================== */
+let S = null;
+function freshState() {
+  return {
+    epoch: (S ? S.epoch : 0) + 1, t0: now(),
+    nodes: [], pods: [], deployments: [], replicasets: [], services: [], events: [],
+    nodeSeq: 0, lastBindings: [], history: [],
+    stats: { deletedFrom: new Set(), curl: {}, undo: 0, nodeFailed: 0, sawBackoff: new Set(), drained: 0 },
+  };
+}
+function makeNode() {
+  const i = ++S.nodeSeq;
+  return { kind:'Node', name:'node-' + i, idx:i, ip:'192.168.49.' + (10 + i), cpu:NODE_CPU, mem:NODE_MEM, ready:true, unschedulable:false,
+           created:now(), downSince:0, notReadyMarked:false, deleting:false, ipNext:2 };
+}
+function makePod({ name, labels, image, container, cpu = DEF_CPU, mem = DEF_MEM, owner = null }) {
+  return { kind:'Pod', name, uid:rand(8) + '-' + rand(4), labels:{ ...labels }, image, container, cpu, mem, owner,
+           nodeName:null, state:'Pending', ready:false, terminating:false, created:now(), restarts:0, ip:null, logs:[],
+           schedSig:null, schedMsg:null, startTime:null, bootUntil:0, cid:rand(12, '0123456789abcdef') };
+}
+function makeDeployment({ name, image, replicas, container, cpu = DEF_CPU, mem = DEF_MEM, labels }) {
+  const lbl = labels || { app:name };
+  return { kind:'Deployment', name, replicas, selector:{ ...lbl }, created:now(), revision:0, rolling:false,
+           template:{ labels:{ ...lbl }, container:container || imageBase(image), image, cpu, mem } };
+}
+const tplHash = t => hashStr(JSON.stringify([t.image, t.container, t.cpu, t.mem, t.labels]));
+const findNode = n => S.nodes.find(x => x.name === n);
+const findPod = n => S.pods.find(x => x.name === n);
+const findDep = n => S.deployments.find(x => x.name === n);
+const findRS = n => S.replicasets.find(x => x.name === n);
+const findSvc = n => S.services.find(x => x.name === n);
+const live = p => !p.terminating;
+const rsOfDep = d => S.replicasets.filter(r => r.owner === d.name);
+const podsOfRS = rs => S.pods.filter(p => p.owner === rs.name);
+const readyCount = rs => podsOfRS(rs).filter(p => p.ready && live(p)).length;
+const depOfPod = p => { const rs = p.owner && findRS(p.owner); return rs ? findDep(rs.owner) : null; };
+const podStatus = p => p.terminating ? 'Terminating' : p.state;
+const pendingPods = () => S.pods.filter(p => !p.nodeName && live(p));
+function nodeAlloc(n) {
+  let cpu = 0, mem = 0, count = 0;
+  for (const p of S.pods) if (p.nodeName === n.name && live(p)) { cpu += p.cpu; mem += p.mem; count++; }
+  return { cpu, mem, count };
+}
+function depStatus(d) {
+  const rss = rsOfDep(d), newRS = rss.find(r => r.hash === tplHash(d.template));
+  const pods = rss.flatMap(podsOfRS).filter(live);
+  const newPods = newRS ? podsOfRS(newRS).filter(live) : [];
+  return { newRS, total:pods.length, ready:pods.filter(p => p.ready).length, updated:newPods.length, newReady:newPods.filter(p => p.ready).length };
+}
+function nodeStatusStr(n) { return (n.notReadyMarked ? 'NotReady' : 'Ready') + (n.unschedulable ? ',SchedulingDisabled' : ''); }
+
+/** Append a Kubernetes-style event (deduplicated with a count, like the real thing). */
+function ev(type, reason, obj, msg, from) {
+  const e = S.events.find(x => x.obj === obj && x.reason === reason && x.msg === msg);
+  if (e) { e.count++; e.time = now(); }
+  else S.events.push({ type, reason, obj, msg, from, time:now(), first:now(), count:1 });
+  if (S.events.length > 400) S.events.shift();
+}
+
+/* =====================================================================
+   3. NARRATION & ANIMATION PRIMITIVES
+   step(): the single primitive used by both commands and controllers.
+   It narrates a sentence, animates the hops, then applies the state change.
+   ===================================================================== */
+let trace = null, lastTrace = null, replaying = false;
+const flashing = new Map();
+
+function beginTrace(title) {
+  trace = { title, steps:[] }; lastTrace = trace;
+  $('#explainTitle').textContent = title;
+  $('#steps').innerHTML = '';
+}
+function addStepLi(text, cls = 'active') {
+  const ol = $('#steps'), li = document.createElement('li');
+  li.innerHTML = text; li.className = cls; ol.appendChild(li);
+  while (ol.children.length > 80) ol.removeChild(ol.firstChild);
+  li.scrollIntoView({ block:'nearest' });
+  return li;
+}
+/** hops: array of [from,to,color] (sequential) or arrays of those (parallel group). */
+async function runHops(hops) {
+  for (const h of hops) {
+    if (Array.isArray(h[0])) await Promise.all(h.map(x => pulse(...x)));
+    else await pulse(...h);
+  }
+}
+async function step(text, hops = [], act) {
+  const epoch = S.epoch;
+  let li = null;
+  if (!replaying) {
+    if (!trace) beginTrace('Cluster activity (reconciliation loop)');
+    trace.steps.push({ text, hops });
+    li = addStepLi(text);
+  }
+  await runHops(hops);
+  if (S.epoch !== epoch) throw new Error('reset');
+  if (act) act();
+  if (li) li.className = '';
+  scheduleRender();
+}
+
+function hotOn(id, ms) {
+  flashing.set(id, now() + ms);
+  const el = document.querySelector(`#board [data-id="${id}"]`);
+  if (el) el.classList.add('hot');
+  setTimeout(() => {
+    if ((flashing.get(id) || 0) <= now()) { flashing.delete(id); const e = document.querySelector(`#board [data-id="${id}"]`); if (e) e.classList.remove('hot'); }
+  }, ms + 20);
+}
+const isHot = id => (flashing.get(id) || 0) > now() ? ' hot' : '';
+
+function pulse(from, to, color, lite) {
+  return new Promise(res => {
+    const a = anchor(from), b = anchor(to);
+    // requestAnimationFrame is paused in background tabs; skip the animation so the engine keeps running.
+    if (!a || !b || document.hidden) return lite ? res() : setTimeout(res, 60);
+    const fx = $('#fx');
+    const p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', routeD(a, b)); p.setAttribute('class', lite ? 'ptrace lite' : 'ptrace'); p.style.stroke = color;
+    fx.appendChild(p);
+    const L = p.getTotalLength() || 1;
+    p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('r', lite ? 3 : 6.5); c.setAttribute('fill', color);
+    if (!lite) c.setAttribute('filter', 'url(#glow)');
+    fx.appendChild(c);
+    if (!lite) hotOn(from, 450);
+    const dur = (lite ? 1100 : 560) * (replaying ? 3 : SPEED) * (0.65 + Math.min(L, 900) / 900 * 0.6);
+    const t0 = performance.now();
+    let done = false;
+    const finish = () => {
+      if (done) return; done = true;
+      c.remove();
+      if (!lite) hotOn(to, 650);
+      p.style.transition = 'opacity .5s'; p.style.opacity = 0;
+      setTimeout(() => p.remove(), 520);
+      res();
+    };
+    const f = t => {
+      if (done) return;
+      const k = Math.max(0, Math.min(1, (t - t0) / dur)), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      const pt = p.getPointAtLength(e * L);
+      c.setAttribute('cx', pt.x); c.setAttribute('cy', pt.y);
+      p.style.strokeDashoffset = L * (1 - e);
+      if (k < 1) requestAnimationFrame(f); else finish();
+    };
+    requestAnimationFrame(f);
+    setTimeout(finish, dur + 400);
+  });
+}
+
+function sparks(x, y, big) {
+  const fx = $('#fx'), g = document.createElementNS(NS, 'g'); fx.appendChild(g);
+  const parts = [];
+  for (let i = 0; i < (big ? 28 : 14); i++) {
+    const l = document.createElementNS(NS, 'line');
+    l.setAttribute('stroke', i % 3 ? '#ffb347' : '#ff5d6c'); l.setAttribute('stroke-width', 2); l.setAttribute('stroke-linecap', 'round');
+    g.appendChild(l);
+    parts.push({ l, ang:Math.random() * Math.PI * 2, sp:(big ? 110 : 48) * (0.5 + Math.random()) });
+  }
+  const ring = document.createElementNS(NS, 'circle');
+  ring.setAttribute('cx', x); ring.setAttribute('cy', y); ring.setAttribute('fill', '#ff5d6c33'); ring.setAttribute('stroke', '#ff5d6c'); ring.setAttribute('stroke-width', 3);
+  g.appendChild(ring);
+  const t0 = performance.now(), D = 700;
+  const f = t => {
+    const k = Math.max(0, Math.min(1, (t - t0) / D));
+    for (const s of parts) {
+      const d1 = s.sp * k, d0 = Math.max(0, d1 - 14), drop = k * k * 25;
+      s.l.setAttribute('x1', x + Math.cos(s.ang) * d0); s.l.setAttribute('y1', y + Math.sin(s.ang) * d0 + drop);
+      s.l.setAttribute('x2', x + Math.cos(s.ang) * d1); s.l.setAttribute('y2', y + Math.sin(s.ang) * d1 + drop);
+    }
+    ring.setAttribute('r', (big ? 90 : 32) * k);
+    g.setAttribute('opacity', 1 - k);
+    if (k < 1) requestAnimationFrame(f); else g.remove();
+  };
+  requestAnimationFrame(f);
+  setTimeout(() => g.remove(), D + 500);
+}
+
+/** Remove pods from the store (optionally with a spark burst where they were drawn). */
+function removePods(pods, withSparks) {
+  for (const p of pods) { const a = anchor('pod:' + p.name); if (withSparks && a) sparks(a.x, a.y); }
+  S.pods = S.pods.filter(p => !pods.includes(p));
+}
+/** API-level delete: graceful (Terminating) if a live kubelet owns it, else immediate. */
+function markDelete(p) {
+  const n = p.nodeName && findNode(p.nodeName);
+  if (!n || !n.ready) removePods([p], !!n);
+  else { p.terminating = true; p.ready = false; p.delAt = now(); }
+}
+
+/* =====================================================================
+   4. RECONCILIATION ENGINE (controllers)
+   Runs forever. Each pass lets every controller compare desired vs actual
+   state and take at most a few actions. Commands never do this work.
+   ===================================================================== */
+async function reconcile() {
+  // Every controller gets a turn each pass (like independent goroutines in the real controller-manager).
+  let did = false;
+  for (const c of [deploymentController, replicaSetController, garbageCollector, scheduler, kubelets, nodeController, endpointsController])
+    if (await c()) did = true;
+  return did;
+}
+async function engineLoop() {
+  let lastBeat = 0;
+  for (;;) {
+    let did = false;
+    try { did = await reconcile(); } catch (e) { if (e.message !== 'reset') console.error(e); }
+    if (!did && now() - lastBeat > 4500) { lastBeat = now(); heartbeat(); }
+    checkLesson();
+    await sleep(did ? 90 * SPEED : 250);
+  }
+}
+function heartbeat() {
+  for (const n of S.nodes) if (n.ready) pulse('kubelet:' + n.name, 'api', C.beat, true);
+}
+
+// --- Deployment controller: owns ReplicaSets, performs rolling updates ---
+async function deploymentController() {
+  const H = [['api','cm',C.watch],['cm','api',C.req]];
+  for (const d of [...S.deployments]) {
+    const hash = tplHash(d.template), rss = rsOfDep(d);
+    const nrs = rss.find(r => r.hash === hash);
+    if (!nrs) {
+      const maxRev = Math.max(0, ...rss.map(r => r.revision));
+      const first = !rss.some(r => r.replicas > 0);
+      const name = `${d.name}-${hash}`;
+      await step(first
+        ? `<b>Deployment controller</b> sees new Deployment <b>${d.name}</b> → creates ReplicaSet <b>${name}</b> with ${d.replicas} replica(s). (Deployment → ReplicaSet → Pods)`
+        : `<b>Deployment controller</b>: the pod template of <b>${d.name}</b> changed (image <code>${esc(d.template.image)}</code>) → creates a <b>new ReplicaSet</b> ${name} (revision ${maxRev + 1}). Rolling update starts: maxSurge=1, maxUnavailable=0.`,
+        [...H, ['api','etcd',C.write]], () => {
+          if (!S.deployments.includes(d)) return;
+          S.replicasets.push({ kind:'ReplicaSet', name, owner:d.name, hash, template:clone(d.template), selector:{ ...d.selector, 'pod-template-hash':hash },
+                               replicas:first ? d.replicas : 0, revision:maxRev + 1, created:now() });
+          d.revision = maxRev + 1;
+          ev('Normal', 'ScalingReplicaSet', 'deployment/' + d.name, `Scaled up replica set ${name} to ${first ? d.replicas : 0}`, 'deployment-controller');
+        });
+      return true;
+    }
+    const olds = rss.filter(r => r !== nrs && r.replicas > 0);
+    const scale = async (rs, to, why) => {
+      const from = rs.replicas;
+      await step(why, H, () => {
+        rs.replicas = to;
+        ev('Normal', 'ScalingReplicaSet', 'deployment/' + d.name, `Scaled ${to > from ? 'up' : 'down'} replica set ${rs.name} from ${from} to ${to}`, 'deployment-controller');
+      });
+      return true;
+    };
+    if (!olds.length) {
+      if (nrs.replicas !== d.replicas)
+        return scale(nrs, d.replicas, `<b>Deployment controller</b>: ${d.name} wants <b>${d.replicas}</b> replicas → sets ReplicaSet ${nrs.name}.spec.replicas ${nrs.replicas} → ${d.replicas}.`);
+      if (d.rolling && depStatus(d).newReady >= d.replicas) {
+        await step(`✅ Rollout of <b>${d.name}</b> complete: every pod runs revision ${nrs.revision}. Old ReplicaSets are kept at 0 replicas so you can <code>rollout undo</code>.`, [['cm','api',C.ok]], () => d.rolling = false);
+        return true;
+      }
+      continue;
+    }
+    // Rolling update in progress (maxSurge = 1, maxUnavailable = 0).
+    // Pods above an RS's spec are about to be deleted, so they don't count as available.
+    d.rolling = true;
+    const avail = r => Math.min(r.replicas, readyCount(r));
+    const total = nrs.replicas + olds.reduce((a, r) => a + r.replicas, 0);
+    const newReady = avail(nrs), oldReady = olds.reduce((a, r) => a + avail(r), 0);
+    if (nrs.replicas > d.replicas) return scale(nrs, d.replicas, `Deployment controller trims new ReplicaSet ${nrs.name} to ${d.replicas}.`);
+    if (nrs.replicas < d.replicas && total < d.replicas + 1)
+      return scale(nrs, nrs.replicas + 1, `🔄 Rolling update: scale <b>up</b> new ReplicaSet <b>${nrs.name}</b> → ${nrs.replicas + 1} (allowed to exceed ${d.replicas} by maxSurge=1).`);
+    const unhealthyOld = olds.find(r => r.replicas > readyCount(r));
+    if (unhealthyOld)
+      return scale(unhealthyOld, readyCount(unhealthyOld), `Rolling update: old ReplicaSet ${unhealthyOld.name} has unready pods → scales them away first (they serve no traffic anyway).`);
+    if (newReady + oldReady > d.replicas) {
+      const r = olds.sort((a, b) => a.revision - b.revision)[0];
+      return scale(r, r.replicas - 1, `🔄 Rolling update: a new pod is <b>Ready</b>, so availability allows scaling <b>down</b> old ReplicaSet <b>${r.name}</b> → ${r.replicas - 1}.`);
+    }
+  }
+  return false;
+}
+
+// --- ReplicaSet controller: keeps N pods matching the template alive ---
+function pickVictims(pods, n) {
+  const rank = p => !p.nodeName ? 0 : !p.ready ? 1 : 2;
+  return [...pods].sort((a, b) => rank(a) - rank(b) || b.created - a.created).slice(0, n);
+}
+async function replicaSetController() {
+  for (const rs of [...S.replicasets]) {
+    const pods = podsOfRS(rs).filter(live), diff = rs.replicas - pods.length;
+    if (diff > 0) {
+      const created = Array.from({ length:diff }, () => makePod({ name:`${rs.name}-${rand(5)}`, labels:{ ...rs.template.labels, 'pod-template-hash':rs.hash },
+        image:rs.template.image, container:rs.template.container, cpu:rs.template.cpu, mem:rs.template.mem, owner:rs.name }));
+      await step(`<b>ReplicaSet controller</b>: ${rs.name} wants <b>${rs.replicas}</b>, sees ${pods.length} → creates ${diff} Pod object(s). No node assigned yet → <b>Pending</b>.`,
+        [['api','cm',C.watch],['cm','api',C.req],['api','etcd',C.write]], () => {
+          if (!S.replicasets.includes(rs)) return;
+          S.pods.push(...created);
+          created.forEach(p => ev('Normal', 'SuccessfulCreate', 'replicaset/' + rs.name, 'Created pod: ' + p.name, 'replicaset-controller'));
+        });
+      return true;
+    }
+    if (diff < 0) {
+      const victims = pickVictims(pods, -diff);
+      await step(`<b>ReplicaSet controller</b>: ${rs.name} has ${pods.length}, wants ${rs.replicas} → deletes ${-diff} pod(s) (unscheduled → unready → newest first).`,
+        [['api','cm',C.watch],['cm','api',C.del]], () => victims.forEach(p => {
+          if (!S.pods.includes(p)) return;
+          markDelete(p);
+          ev('Normal', 'SuccessfulDelete', 'replicaset/' + rs.name, 'Deleted pod: ' + p.name, 'replicaset-controller');
+        }));
+      return true;
+    }
+  }
+  return false;
+}
+
+// --- Garbage collector: cascading deletes via ownerReferences ---
+async function garbageCollector() {
+  const orphanRS = S.replicasets.filter(r => !findDep(r.owner));
+  if (orphanRS.length) {
+    await step(`<b>Garbage collector</b>: ReplicaSet(s) ${orphanRS.map(r => r.name).join(', ')} lost their owner Deployment → <b>cascading delete</b> of them and their pods.`,
+      [['api','cm',C.watch],['cm','api',C.del],['api','etcd',C.del]], () => {
+        S.replicasets = S.replicasets.filter(r => !orphanRS.includes(r));
+        S.pods.filter(p => orphanRS.some(r => r.name === p.owner) && live(p)).forEach(markDelete);
+      });
+    return true;
+  }
+  const orphanPods = S.pods.filter(p => p.owner && !findRS(p.owner) && live(p));
+  if (orphanPods.length) {
+    await step(`<b>Garbage collector</b>: pods whose ReplicaSet is gone are deleted.`, [['cm','api',C.del]], () => orphanPods.forEach(markDelete));
+    return true;
+  }
+  return false;
+}
+
+// --- Scheduler: filter + score, then bind ---
+function schedSignature() { return JSON.stringify(S.nodes.map(n => { const a = nodeAlloc(n); return [n.name, n.ready, n.unschedulable, a.cpu, a.mem]; })); }
+function pickNodeFor(p, extra) {
+  if (!S.nodes.length) return { msg:'no nodes available to schedule pods' };
+  const reasons = {}, inc = r => reasons[r] = (reasons[r] || 0) + 1, ok = [];
+  for (const n of S.nodes) {
+    if (!n.ready) { inc('node(s) had untolerated taint {node.kubernetes.io/unreachable: }'); continue; }
+    if (n.unschedulable) { inc('node(s) were unschedulable'); continue; }
+    const a = nodeAlloc(n), e = extra[n.name] || { cpu:0, mem:0 };
+    const cpuFree = n.cpu - a.cpu - e.cpu, memFree = n.mem - a.mem - e.mem;
+    if (p.cpu > cpuFree) { inc('Insufficient cpu'); continue; }
+    if (p.mem > memFree) { inc('Insufficient memory'); continue; }
+    ok.push({ n, score:(cpuFree - p.cpu) / n.cpu + (memFree - p.mem) / n.mem });
+  }
+  if (!ok.length) {
+    const N = S.nodes.length;
+    return { msg:`0/${N} nodes are available: ${Object.entries(reasons).map(([r, c]) => c + ' ' + r).join(', ')}. preemption: 0/${N} nodes are available: ${N} Preemption is not helpful for scheduling.` };
+  }
+  ok.sort((a, b) => b.score - a.score);
+  return { node:ok[0].n };
+}
+async function scheduler() {
+  const sig = schedSignature();
+  const todo = S.pods.filter(p => !p.nodeName && live(p) && p.schedSig !== sig);
+  if (!todo.length) return false;
+  await step(`<b>Scheduler</b> (watching for pods with empty <code>spec.nodeName</code>) receives ${todo.length} pod(s).`, [['api','sched',C.watch]]);
+  const plan = [], fails = [], extra = {};
+  for (const p of todo) {
+    if (!S.pods.includes(p) || p.nodeName) continue;
+    const r = pickNodeFor(p, extra);
+    if (r.node) { plan.push([p, r.node]); const e = extra[r.node.name] = extra[r.node.name] || { cpu:0, mem:0 }; e.cpu += p.cpu; e.mem += p.mem; }
+    else fails.push([p, r.msg]);
+  }
+  if (plan.length)
+    await step(`Scheduler <b>filters</b> nodes (Ready? schedulable? enough free CPU/memory for the requests?), <b>scores</b> the survivors (most free resources wins) and POSTs a <b>Binding</b>: ${plan.map(([p, n]) => `${p.name} → <b>${n.name}</b>`).join(', ')}.`,
+      [['sched','api',C.req],['api','etcd',C.write]], () => plan.forEach(([p, n]) => {
+        if (!S.pods.includes(p) || p.nodeName || !S.nodes.includes(n)) return;
+        p.nodeName = n.name; p.schedMsg = null;
+        S.lastBindings.unshift(`${p.name} → ${n.name}`); S.lastBindings.length = Math.min(S.lastBindings.length, 10);
+        ev('Normal', 'Scheduled', 'pod/' + p.name, `Successfully assigned default/${p.name} to ${n.name}`, 'default-scheduler');
+      }));
+  if (fails.length)
+    await step(`⚠️ Scheduler can't place ${fails.length} pod(s) → they stay <b>Pending</b>. Reason: <i>${esc(fails[0][1])}</i> It will retry when the cluster changes.`,
+      [['sched','api',C.del]], () => fails.forEach(([p, m]) => { p.schedMsg = m; ev('Warning', 'FailedScheduling', 'pod/' + p.name, m, 'default-scheduler'); }));
+  const sig2 = schedSignature();
+  todo.forEach(p => { if (!p.nodeName) p.schedSig = sig2; });
+  return true;
+}
+
+// --- kubelet (one per node) + container runtime ---
+function genLogs(p) {
+  const ts = new Date().toISOString(), b = imageBase(p.image);
+  if (b === 'nginx') return [
+    '/docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration',
+    '/docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh',
+    '10-listen-on-ipv6-by-default.sh: info: Enabled listen on IPv6 in /etc/nginx/conf.d/default.conf',
+    '/docker-entrypoint.sh: Configuration complete; ready for start up',
+    `${ts.slice(0, 10).replace(/-/g, '/')} ${ts.slice(11, 19)} [notice] 1#1: using the "epoll" event method`,
+    `${ts.slice(0, 10).replace(/-/g, '/')} ${ts.slice(11, 19)} [notice] 1#1: nginx/${/^\d/.test(imageTag(p.image)) ? imageTag(p.image) : '1.27.0'}`,
+    `${ts.slice(0, 10).replace(/-/g, '/')} ${ts.slice(11, 19)} [notice] 1#1: start worker processes`];
+  if (b === 'redis') return [`1:C ${ts} * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo`, `1:M ${ts} * Running mode=standalone, port=6379.`, `1:M ${ts} * Server initialized`, `1:M ${ts} * Ready to accept connections tcp`];
+  if (b === 'httpd') return [`AH00558: httpd: Could not reliably determine the server's fully qualified domain name, using ${p.ip}.`, `[mpm_event:notice] [pid 1:tid 1] AH00489: Apache/2.4.59 (Unix) configured -- resuming normal operations`];
+  if (b === 'busybox' || b === 'alpine') return ['/ # (container running sleep 3600)'];
+  return [`${ts} INFO  Starting ${b} (pid 1)`, `${ts} INFO  Loaded configuration from env`, `${ts} INFO  Listening on 0.0.0.0:8080`, `${ts} INFO  Ready`];
+}
+// Every node's kubelet runs independently, so they act in parallel.
+async function kubelets() {
+  const results = await Promise.all(S.nodes.filter(n => n.ready).map(kubeletSync));
+  return results.some(Boolean);
+}
+async function kubeletSync(n) {
+  let did = false;
+  {
+    const K = 'kubelet:' + n.name, RT = 'rt:' + n.name, mine = () => S.pods.filter(p => p.nodeName === n.name);
+    const names = ps => ps.map(p => `<b>${p.name}</b>`).join(', ');
+    const fresh = mine().filter(p => p.state === 'Pending' && live(p));
+    if (fresh.length) {
+      await step(`<b>kubelet@${n.name}</b> sees ${names(fresh)} bound to its node → calls <b>containerd</b> over CRI: create pod sandbox + network, pull image, start container. LED blinks <span style="color:#ffd23f">yellow</span> while booting.`,
+        [['api',K,C.watch],[K,RT,C.req]], () => fresh.forEach(p => {
+          if (!S.pods.includes(p) || p.terminating) return;
+          p.state = 'ContainerCreating'; p.ip = `10.244.${n.idx}.${n.ipNext++}`;
+          p.bootUntil = now() + (1400 + Math.random() * 1200) * SPEED;
+          ev('Normal', 'Pulling', 'pod/' + p.name, `Pulling image "${p.image}"`, 'kubelet');
+        }));
+      did = true;
+    }
+    const booted = mine().filter(p => p.state === 'ContainerCreating' && live(p) && now() >= p.bootUntil);
+    const good = booted.filter(p => imageOK(p.image)), bad = booted.filter(p => !imageOK(p.image));
+    if (good.length) {
+      await step(`containerd started ${names(good)}. Readiness check passes → kubelet PATCHes pod status <b>Running / Ready</b> to the API server (LED turns <span style="color:#3ddc97">green</span>).`,
+        [good.map(p => [RT, 'pod:' + p.name, C.ok]), [K,'api',C.ok], ['api','etcd',C.write]], () => good.forEach(p => {
+          if (!S.pods.includes(p) || p.terminating) return;
+          p.state = 'Running'; p.ready = true; p.startTime = now(); p.logs = genLogs(p);
+          ev('Normal', 'Pulled', 'pod/' + p.name, `Successfully pulled image "${p.image}" in ${(0.8 + Math.random() * 3).toFixed(3)}s`, 'kubelet');
+          ev('Normal', 'Created', 'pod/' + p.name, `Created container ${p.container}`, 'kubelet');
+          ev('Normal', 'Started', 'pod/' + p.name, `Started container ${p.container}`, 'kubelet');
+        }));
+      did = true;
+    }
+    if (bad.length) {
+      await step(`❌ containerd <b>failed to pull</b> image <code>${esc(bad[0].image)}</code> (repository not found / no pull access) → <b>ErrImagePull</b>, then <b>ImagePullBackOff</b>: kubelet retries with exponential back-off. The pod never becomes Ready.`,
+        [[RT,K,C.del],[K,'api',C.del]], () => bad.forEach(p => {
+          if (!S.pods.includes(p) || p.terminating) return;
+          p.state = 'ImagePullBackOff';
+          const ref = p.image.includes('/') ? p.image : `docker.io/library/${p.image}${p.image.includes(':') ? '' : ':latest'}`;
+          ev('Warning', 'Failed', 'pod/' + p.name, `Failed to pull image "${p.image}": rpc error: code = NotFound desc = failed to pull and unpack image "${ref}": failed to resolve reference "${ref}": ${ref}: not found`, 'kubelet');
+          ev('Warning', 'Failed', 'pod/' + p.name, 'Error: ErrImagePull', 'kubelet');
+          ev('Normal', 'BackOff', 'pod/' + p.name, `Back-off pulling image "${p.image}"`, 'kubelet');
+          ev('Warning', 'Failed', 'pod/' + p.name, 'Error: ImagePullBackOff', 'kubelet');
+          const d = depOfPod(p); if (d) S.stats.sawBackoff.add(d.name);
+        }));
+      did = true;
+    }
+    const dying = mine().filter(p => p.terminating);
+    if (dying.length) {
+      await step(`<b>kubelet@${n.name}</b> sees ${names(dying)} marked for deletion → containerd sends SIGTERM, waits the grace period, then SIGKILL. 💥 Pod removed.`,
+        [['api',K,C.watch],[K,RT,C.del]], () => {
+          const still = dying.filter(p => S.pods.includes(p));
+          still.forEach(p => ev('Normal', 'Killing', 'pod/' + p.name, `Stopping container ${p.container}`, 'kubelet'));
+          removePods(still, true);
+        });
+      did = true;
+    }
+  }
+  return did && S.nodes.includes(n);
+}
+
+// --- Node lifecycle controller + PodGC ---
+async function nodeController() {
+  for (const n of [...S.nodes]) {
+    if (n.ready) continue;
+    if (!n.notReadyMarked && now() - n.downSince > 1800 * SPEED) {
+      await step(`<b>Node lifecycle controller</b>: no heartbeat (Lease renewal) from <b>${n.name}</b> for too long (real default: 40s) → marks it <b>NotReady</b> and taints it <code>node.kubernetes.io/unreachable:NoExecute</code>.`,
+        [['api','cm',C.watch],['cm','api',C.del],['api','etcd',C.write]], () => {
+          n.notReadyMarked = true;
+          ev('Normal', 'NodeNotReady', 'node/' + n.name, `Node ${n.name} status is now: NodeNotReady`, 'node-controller');
+        });
+      return true;
+    }
+    if (n.notReadyMarked && now() - n.downSince > 4000 * SPEED) {
+      const pods = S.pods.filter(p => p.nodeName === n.name);
+      if (pods.length) {
+        const bare = pods.filter(p => !p.owner);
+        await step(`Pods on <b>${n.name}</b> exceeded their <code>unreachable</code> toleration (real default: 300s) → <b>evicted</b>. ${bare.length ? `Bare pod(s) ${bare.map(p => p.name).join(', ')} are <b>gone for good</b> — no controller owns them. ` : ''}${pods.length > bare.length ? 'Their ReplicaSets will notice and create replacements on healthy nodes.' : ''}`,
+          [['cm','api',C.del],['api','etcd',C.del]], () => {
+            const still = pods.filter(p => S.pods.includes(p));
+            still.forEach(p => ev('Normal', 'TaintManagerEviction', 'pod/' + p.name, `Marking for deletion Pod default/${p.name}`, 'taint-eviction-controller'));
+            removePods(still, true);
+          });
+        return true;
+      }
+      if (n.deleting) {
+        await step(`Node object <b>${n.name}</b> is deleted from the cluster.`, [['api','etcd',C.del]], () => {
+          S.nodes = S.nodes.filter(x => x !== n);
+          ev('Normal', 'RemovingNode', 'node/' + n.name, `Node ${n.name} event: Removing Node ${n.name} from Controller`, 'node-controller');
+        });
+        return true;
+      }
+    }
+  }
+  const lost = S.pods.filter(p => p.nodeName && !findNode(p.nodeName));
+  if (lost.length) {
+    await step('<b>PodGC</b>: pods bound to a node that no longer exists are deleted.', [['api','cm',C.watch],['cm','api',C.del]], () => removePods(lost, false));
+    return true;
+  }
+  return false;
+}
+
+// --- EndpointSlice controller + kube-proxy programming ---
+async function endpointsController() {
+  for (const s of S.services) {
+    const eps = S.pods.filter(p => p.ready && live(p) && matches(s.selector, p.labels)).map(p => p.name).sort();
+    const sig = eps.join(',');
+    if (s.epSig === sig) continue;
+    const proxies = S.nodes.filter(n => n.ready).map(n => ['api', 'proxy:' + n.name, C.watch]);
+    await step(`<b>EndpointSlice controller</b>: Service <b>${s.name}</b> (selector <code>${selStr(s.selector)}</code>) now has <b>${eps.length}</b> ready endpoint(s) → every <b>kube-proxy</b> rewrites its iptables rules.`,
+      [['api','cm',C.watch],['cm','api',C.req], proxies.length ? proxies : []].filter(h => h.length), () => { s.epSig = sig; s.endpoints = eps; });
+    return true;
+  }
+  return false;
+}
+
+/* =====================================================================
+   5. LAYOUT & RENDERING
+   ===================================================================== */
+const CP = {
+  kubectl:{ x:30, y:30, w:150, h:56, accent:'#8ea3cf', label:'kubectl', sub:'YOUR TERMINAL', desc:'The CLI you type into. It turns commands into HTTPS REST calls to the API server — it never talks to nodes or etcd directly.' },
+  client: { x:30, y:100, w:150, h:34, accent:'#ffe66d', label:'client', sub:'', desc:'A stand-in for something sending HTTP traffic to your Services (a browser, another pod, the internet). Use <code>curl &lt;service&gt;</code>.' },
+  api:    { x:520, y:30, w:200, h:70, accent:'#326ce5', label:'kube-apiserver', sub:'CONTROL PLANE · REST', desc:'The front door of the cluster. Authenticates, authorizes (RBAC), runs admission, validates, and persists objects in etcd. Every component — scheduler, controllers, kubelets — talks only to it, mostly via <b>watches</b>.' },
+  etcd:   { x:965, y:36, w:200, h:60, accent:'#419eda', label:'etcd', sub:'RAFT KEY-VALUE STORE', desc:'Strongly-consistent key-value store holding all cluster state (desired spec + observed status). Only the API server reads/writes it.' },
+  sched:  { x:300, y:142, w:170, h:56, accent:'#a78bfa', label:'kube-scheduler', sub:'PLACEMENT', desc:'Watches for pods with no node. Filters nodes that can\'t run the pod (NotReady, cordoned, not enough CPU/memory) and scores the rest. It only writes a <b>Binding</b>; it never starts containers.' },
+  cm:     { x:770, y:142, w:190, h:56, accent:'#22c3e6', label:'controller-manager', sub:'RECONCILE LOOPS', desc:'Runs many control loops: Deployment, ReplicaSet, Node lifecycle, EndpointSlice, Garbage collector… Each loop: observe → diff desired vs actual → act → repeat.' },
+};
+const NODE_DESC = {
+  kubelet:'The node agent. Watches the API server for pods bound to its node, asks the container runtime to run them, runs probes, and reports pod status + node heartbeats.',
+  rt:'Container runtime (containerd). Pulls images, creates sandboxes and starts/stops containers when the kubelet asks via CRI.',
+  proxy:'kube-proxy. Watches Services/EndpointSlices and programs iptables/IPVS rules so a Service\'s virtual IP load-balances to ready pod IPs.',
+};
+let G = {}, layoutInfo = {};
+const anchor = id => { const r = G[id]; return r ? { x:r.x + r.w / 2, y:r.y + r.h / 2 } : null; };
+function routeD(a, b) {
+  const cross = (a.y < BUS_Y) !== (b.y < BUS_Y);
+  const ym = cross ? BUS_Y : (a.y + b.y) / 2;
+  return `M${a.x} ${a.y} L${a.x} ${ym} L${b.x} ${ym} L${b.x} ${b.y}`;
+}
+function nodeBox(i) { const c = i % 3, r = Math.floor(i / 3); return { x:20 + c * 390, y:BUS_Y + 30 + r * 300, w:370, h:280 }; }
+
+function layout() {
+  G = {};
+  for (const [id, r] of Object.entries(CP)) G[id] = r;
+  S.services.slice(0, 5).forEach((s, i) => G['svc:' + s.name] = { x:30, y:168 + i * 30, w:230, h:26 });
+  const wl = [];
+  for (const d of S.deployments) {
+    wl.push({ id:'dep:' + d.name, d });
+    for (const rs of rsOfDep(d).sort((a, b) => a.revision - b.revision)) if (rs.replicas > 0 || podsOfRS(rs).length) wl.push({ id:'rs:' + rs.name, rs, d });
+  }
+  wl.slice(0, 7).forEach((r, i) => G[r.id] = { x:983, y:166 + i * 22, w:194, h:19 });
+  const pend = pendingPods();
+  pend.slice(0, 6).forEach((p, i) => G['pod:' + p.name] = { x:298 + (i % 3) * 63, y:240 + Math.floor(i / 3) * 34, w:58, h:30, small:true });
+  S.nodes.forEach((n, i) => {
+    const b = nodeBox(i);
+    G['node:' + n.name] = b;
+    G['kubelet:' + n.name] = { x:b.x + 12, y:b.y + 32, w:100, h:38 };
+    G['rt:' + n.name] = { x:b.x + 124, y:b.y + 32, w:112, h:38 };
+    G['proxy:' + n.name] = { x:b.x + 248, y:b.y + 32, w:110, h:38 };
+    S.pods.filter(p => p.nodeName === n.name).slice(0, NODE_SLOTS).forEach((p, s) =>
+      G['pod:' + p.name] = { x:b.x + 12 + (s % 4) * 89, y:b.y + 116 + Math.floor(s / 4) * 52, w:84, h:46 });
+  });
+  layoutInfo = { wl, pend };
+}
+
+function chipSvg(id, label, sub, accent = '#326ce5') {
+  const r = G[id]; let pins = '';
+  for (let x = r.x + 10; x < r.x + r.w - 6; x += 12) pins += `<rect class="pin" x="${x}" y="${r.y - 4}" width="4" height="4" rx="1"/><rect class="pin" x="${x}" y="${r.y + r.h}" width="4" height="4" rx="1"/>`;
+  const logo = id === 'api' ? `<use href="#k8s" x="${r.x + 10}" y="${r.y + r.h / 2 - 11}" width="22" height="22"/>` : '';
+  const cx = r.x + r.w / 2 + (logo ? 12 : 0);
+  return `<g class="chip${isHot(id)}" data-id="${id}">${pins}<rect class="body" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="7"/>
+    <rect x="${r.x + 10}" y="${r.y}" width="${r.w - 20}" height="2.5" rx="1.2" fill="${accent}" opacity=".9"/>
+    <circle cx="${r.x + r.w - 9}" cy="${r.y + 9}" r="2.6" fill="${accent}" filter="url(#glow)"/>${logo}
+    <text x="${cx}" y="${r.y + r.h / 2 + (sub ? -1 : 4)}">${label}</text>
+    ${sub ? `<text class="sub" x="${cx}" y="${r.y + r.h / 2 + 13}">${sub}</text>` : ''}</g>`;
+}
+function revColor(p) { const rs = p.owner && findRS(p.owner); return rs ? REV_COLORS[(rs.revision - 1) % REV_COLORS.length] : '#e0e0e0'; }
+function shortPod(p) {
+  const d = depOfPod(p);
+  if (!d) return p.name;
+  return (d.name.length > 8 ? d.name.slice(0, 7) + '…' : d.name + '-') + p.name.slice(-5);
+}
+function podSvg(p) {
+  const id = 'pod:' + p.name, r = G[id]; if (!r) return '';
+  const st = podStatus(p);
+  const led = st === 'Running' ? 'ok' : st === 'ContainerCreating' ? 'boot' : st === 'Terminating' ? 'term' : /Err|BackOff/.test(st) ? 'err' : 'idle';
+  const fill = { ok:'#0d3330', boot:'#3a3312', err:'#3d1222', term:'#2a0c18', idle:'#18213f' }[led];
+  const nm = shortPod(p), max = r.small ? 9 : 15, txt = nm.length > max ? nm.slice(0, max - 1) + '…' : nm;
+  const sub = st === 'Running' ? ':' + imageTag(p.image) : st === 'ContainerCreating' ? 'Creating' : st;
+  return `<g class="pod${isHot(id)}" data-id="${id}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="7" fill="${fill}" stroke="${revColor(p)}" stroke-width="1.6"/>
+    <circle class="led ${led}" cx="${r.x + 8}" cy="${r.y + 8}" r="3.5"/>
+    <text x="${r.x + r.w / 2 + 3}" y="${r.y + (r.small ? 19 : 21)}">${esc(txt)}</text>
+    ${r.small ? '' : `<text class="sub" x="${r.x + r.w / 2}" y="${r.y + 35}">${esc(sub.length > 16 ? sub.slice(0, 15) + '…' : sub)}</text>`}</g>`;
+}
+
+let renderQueued = false;
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; render(); });
+}
+function render() {
+  layout();
+  const rows = Math.max(1, Math.ceil(S.nodes.length / 3)), H = BUS_Y + 40 + rows * 300;
+  const svg = $('#svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  let h = `<rect width="${W}" height="${H}" fill="#0a1330"/><rect width="${W}" height="${H}" fill="url(#grid)"/><rect width="${W}" height="${BUS_Y + 60}" fill="url(#boardGlow)"/>
+    <text class="silk" x="200" y="22">CONTROL PLANE</text><text class="silk" x="20" y="${BUS_Y - 8}">API BUS</text>
+    <text class="silk" x="${W - 260}" y="${H - 10}">KUBECIRCUIT · REV 3.0 · NS DEFAULT</text>
+    <line x1="10" x2="${W - 10}" y1="${BUS_Y}" y2="${BUS_Y}" stroke="#326ce5" stroke-width="8" opacity=".18" stroke-linecap="round"/>
+    <line x1="10" x2="${W - 10}" y1="${BUS_Y}" y2="${BUS_Y}" stroke="#5b8def" stroke-width="1.5" opacity=".55" stroke-dasharray="2 6"/>`;
+  // Traces (drawn under chips)
+  const tr = (a, b, thin) => { const A = anchor(a), B = anchor(b); if (A && B) h += `<path class="trace${thin ? ' thin' : ''}" d="${routeD(A, B)}"/>`; };
+  ['kubectl','etcd','sched','cm'].forEach(c => tr('api', c));
+  S.services.forEach(s => tr('client', 'svc:' + s.name, true));
+  S.nodes.forEach(n => { tr('api', 'kubelet:' + n.name); tr('kubelet:' + n.name, 'rt:' + n.name); tr('rt:' + n.name, 'proxy:' + n.name, true); });
+  // Control plane chips
+  for (const [id, r] of Object.entries(CP)) h += chipSvg(id, r.label, r.sub, r.accent);
+  // Services box
+  h += `<g class="box"><rect x="20" y="146" width="250" height="176" rx="10"/><text x="30" y="161">SERVICES</text></g>`;
+  if (!S.services.length) h += `<text x="30" y="186" fill="#5a6a93" font-size="11">(none) — kubectl expose …</text>`;
+  S.services.slice(0, 5).forEach(s => {
+    const r = G['svc:' + s.name];
+    h += `<g class="row${isHot('svc:' + s.name)}" data-id="svc:${s.name}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="6"/>
+      <text x="${r.x + 8}" y="${r.y + 17}"><tspan fill="#4fc3ff">svc/${esc(s.name)}</tspan> ${s.type === 'ClusterIP' ? 'CIP' : s.type === 'NodePort' ? 'NP' : 'LB'} :${s.port} → <tspan fill="${s.endpoints.length ? '#3ddc97' : '#ff5d6c'}">${s.endpoints.length} ep</tspan></text></g>`;
+  });
+  if (S.services.length > 5) h += `<text x="30" y="318" fill="#ffd479" font-size="10">+${S.services.length - 5} more</text>`;
+  // Pending tray
+  h += `<g class="box"><rect x="290" y="214" width="200" height="108" rx="10"/><text x="300" y="230">PENDING (no node)</text></g>`;
+  layoutInfo.pend.slice(0, 6).forEach(p => h += podSvg(p));
+  if (layoutInfo.pend.length > 6) h += `<text x="298" y="318" fill="#ffd479" font-size="10">+${layoutInfo.pend.length - 6} more</text>`;
+  // Workloads box (Deployments -> ReplicaSets)
+  h += `<g class="box"><rect x="975" y="134" width="210" height="188" rx="10"/><text x="985" y="150">WORKLOADS</text></g>`;
+  if (!layoutInfo.wl.length) h += `<text x="985" y="176" fill="#5a6a93" font-size="11">(no deployments)</text>`;
+  layoutInfo.wl.slice(0, 7).forEach(row => {
+    const r = G[row.id];
+    if (row.rs) {
+      const pods = podsOfRS(row.rs).filter(live), col = REV_COLORS[(row.rs.revision - 1) % REV_COLORS.length];
+      const dots = pods.slice(0, 8).map(p => p.ready ? '●' : '○').join('');
+      h += `<g class="row${isHot(row.id)}" data-id="${row.id}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="5"/>
+        <text x="${r.x + 8}" y="${r.y + 13}">└ <tspan fill="${col}">rs …${row.rs.hash.slice(-4)} r${row.rs.revision}</tspan> ${row.rs.replicas} <tspan fill="${col}">${dots}</tspan></text></g>`;
+    } else {
+      const st = depStatus(row.d);
+      h += `<g class="row${isHot(row.id)}" data-id="${row.id}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="5"/>
+        <text x="${r.x + 6}" y="${r.y + 13}"><tspan fill="#ffb347">deploy/${esc(row.d.name)}</tspan> ${st.ready}/${row.d.replicas}${row.d.rolling ? ' <tspan fill="#ffe66d">⟳</tspan>' : ''}</text></g>`;
+    }
+  });
+  if (layoutInfo.wl.length > 7) h += `<text x="985" y="318" fill="#ffd479" font-size="10">+${layoutInfo.wl.length - 7} more</text>`;
+  // Worker nodes
+  S.nodes.forEach(n => {
+    const b = G['node:' + n.name], a = nodeAlloc(n);
+    const cls = !n.ready ? ' down' : n.unschedulable ? ' cordon' : '';
+    const status = !n.ready ? (n.notReadyMarked ? '● NotReady' : '● no heartbeat…') : n.unschedulable ? '● SchedulingDisabled' : '● Ready';
+    const scol = !n.ready ? '#ff5d6c' : n.unschedulable ? '#ffd479' : '#3ddc97';
+    h += `<g class="node${cls}${isHot('node:' + n.name)}" data-id="node:${n.name}"><rect class="frame" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="12"/>
+      <rect class="band" x="${b.x + 1}" y="${b.y + 1}" width="${b.w - 2}" height="26" rx="11"/><rect class="band" x="${b.x + 1}" y="${b.y + 14}" width="${b.w - 2}" height="13"/>
+      <use href="#k8s" x="${b.x + 9}" y="${b.y + 6}" width="15" height="15" opacity=".85"/>
+      <text x="${b.x + 30}" y="${b.y + 18}">${n.name} <tspan fill="#8a9bc4" font-size="10" font-weight="500">${n.ip} · worker</tspan></text>
+      <text x="${b.x + b.w - 12}" y="${b.y + 18}" text-anchor="end" style="fill:${scol}">${status}</text></g>`;
+    h += chipSvg('kubelet:' + n.name, 'kubelet', '', '#326ce5') + chipSvg('rt:' + n.name, 'containerd', '', '#8b9cf7') + chipSvg('proxy:' + n.name, 'kube-proxy', '', '#22c3e6');
+    const bar = (y, label, used, cap, unit) => {
+      const f = Math.min(1, used / cap), col = f > .85 ? '#ff5d6c' : f > .6 ? '#ffb347' : '#5b8def';
+      return `<text x="${b.x + 12}" y="${y + 8}" font-size="10" font-weight="600" fill="#8a9bc4">${label}</text>
+        <rect class="bar-bg" x="${b.x + 48}" y="${y}" width="200" height="8" rx="4"/>
+        <rect x="${b.x + 48}" y="${y}" width="${200 * f}" height="8" rx="4" fill="${col}" opacity=".9"/>
+        <text x="${b.x + 256}" y="${y + 8}" font-size="10" fill="#8a9bc4">${used}/${cap}${unit}</text>`;
+    };
+    h += bar(b.y + 82, 'CPU', a.cpu, n.cpu, 'm') + bar(b.y + 98, 'MEM', a.mem, n.mem, 'Mi');
+    for (let s = 0; s < NODE_SLOTS; s++) h += `<rect class="slot" x="${b.x + 12 + (s % 4) * 89}" y="${b.y + 116 + Math.floor(s / 4) * 52}" width="84" height="46" rx="7"/>`;
+    const onNode = S.pods.filter(p => p.nodeName === n.name);
+    onNode.slice(0, NODE_SLOTS).forEach(p => h += podSvg(p));
+    if (onNode.length > NODE_SLOTS) h += `<text x="${b.x + b.w - 12}" y="${b.y + b.h - 6}" text-anchor="end" fill="#ffd479" font-size="10">+${onNode.length - NODE_SLOTS} more</text>`;
+    if (!n.ready) h += `<text x="${b.x + b.w / 2}" y="${b.y + 160}" text-anchor="middle" fill="#ff5d6c" font-size="18" opacity=".7" style="pointer-events:none">⚠ NO HEARTBEAT</text>`;
+  });
+  if (!S.nodes.length) h += `<text x="40" y="${BUS_Y + 60}" fill="#ff5d6c" font-size="13">No worker nodes — click "＋" next to Nodes.</text>`;
+  $('#board').innerHTML = h;
+  updateStats();
+  if (!$('#events').classList.contains('hidden')) renderEvents();
+}
+function updateStats() {
+  const ready = S.nodes.filter(n => n.ready).length, running = S.pods.filter(p => p.state === 'Running' && live(p)).length;
+  const pend = S.pods.filter(p => live(p) && p.state !== 'Running').length;
+  const failing = S.pods.filter(p => /Err|BackOff/.test(p.state)).length;
+  const stat = (label, val, color) => `<span class="stat" style="color:${color}"><i></i><span style="color:var(--dim)">${label}</span><b>${val}</b></span>`;
+  $('#stats').innerHTML = stat('Nodes', `${ready}/${S.nodes.length}`, ready === S.nodes.length ? '#3ddc97' : '#ff5d6c')
+    + stat('Pods', `${running}/${S.pods.length}`, '#5b8def')
+    + stat('Pending', pend, pend ? '#ffb347' : '#5a6a93')
+    + (failing ? stat('Failing', failing, '#ff5d6c') : '')
+    + stat('Deploy', S.deployments.length, '#a78bfa')
+    + stat('Svc', S.services.length, '#4fc3ff');
+}
+function renderEvents() {
+  const evs = [...S.events].sort((a, b) => a.time - b.time).slice(-150);
+  $('#events').innerHTML = evs.length ? `<table><tr><th>LAST SEEN</th><th>TYPE</th><th>REASON</th><th>OBJECT</th><th>MESSAGE</th></tr>${
+    evs.map(e => `<tr class="${e.type}"><td>${age(e.time)}</td><td>${e.type}</td><td>${e.reason}</td><td>${esc(e.obj)}</td><td>${esc(e.msg)}${e.count > 1 ? ` (x${e.count})` : ''}</td></tr>`).join('')}</table>` : '<i style="color:#8a9bc4">No events yet.</i>';
+  $('#events').scrollTop = 1e9;
+}
+setInterval(() => { if (!$('#events').classList.contains('hidden')) renderEvents(); }, 2000);
+
+/* =====================================================================
+   6. MANIFESTS, YAML, DESCRIBE OUTPUT
+   ===================================================================== */
+function cleanObj(o) {
+  if (Array.isArray(o)) return o.map(cleanObj);
+  if (o && typeof o === 'object') { const r = {}; for (const [k, v] of Object.entries(o)) if (v !== undefined && v !== null) r[k] = cleanObj(v); return r; }
+  return o;
+}
+function yScalar(v) {
+  if (typeof v === 'string' && (v === '' || /^[\d.]+$/.test(v) || /[:#{}\[\],&*?|<>=!%@`]/.test(v) || v === 'true' || v === 'false')) return JSON.stringify(v);
+  return String(v);
+}
+function toYAML(o, ind = 0) {
+  const pad = ' '.repeat(ind);
+  if (Array.isArray(o)) {
+    if (!o.length) return ' []';
+    return '\n' + o.map(v => v && typeof v === 'object' ? pad + '- ' + toYAML(v, ind + 2).replace(/^\n\s*/, '') : pad + '- ' + yScalar(v)).join('\n');
+  }
+  if (o && typeof o === 'object') {
+    const ks = Object.keys(o);
+    if (!ks.length) return ' {}';
+    return '\n' + ks.map(k => { const v = o[k]; return v && typeof v === 'object' ? `${pad}${k}:${toYAML(v, ind + 2)}` : `${pad}${k}: ${yScalar(v)}`; }).join('\n');
+  }
+  return ' ' + yScalar(o);
+}
+const yaml = o => toYAML(cleanObj(o)).replace(/^\n/, '');
+
+function containerState(p) {
+  if (p.state === 'Running') return { running:{ startedAt:iso(p.startTime) } };
+  return { waiting:{ reason:p.state === 'Pending' ? 'ContainerCreating' : p.state } };
+}
+function podManifest(p) {
+  const n = p.nodeName && findNode(p.nodeName);
+  return { apiVersion:'v1', kind:'Pod',
+    metadata:{ name:p.name, namespace:'default', uid:p.uid, labels:p.labels, creationTimestamp:iso(p.created), deletionTimestamp:p.terminating ? iso(p.delAt) : undefined,
+      ownerReferences:p.owner ? [{ apiVersion:'apps/v1', kind:'ReplicaSet', name:p.owner, controller:true, blockOwnerDeletion:true }] : undefined },
+    spec:{ nodeName:p.nodeName || undefined, restartPolicy:'Always',
+      containers:[{ name:p.container, image:p.image, resources:{ requests:{ cpu:p.cpu + 'm', memory:p.mem + 'Mi' } } }] },
+    status:{ phase:p.state === 'Running' ? 'Running' : 'Pending', hostIP:n ? n.ip : undefined, podIP:p.ip || undefined,
+      conditions:[{ type:'PodScheduled', status:p.nodeName ? 'True' : 'False', reason:p.nodeName ? undefined : 'Unschedulable', message:p.schedMsg || undefined },
+                  { type:'Ready', status:p.ready ? 'True' : 'False' }],
+      containerStatuses:p.nodeName ? [{ name:p.container, image:p.image, ready:p.ready, restartCount:p.restarts, state:containerState(p) }] : undefined } };
+}
+function depManifest(d) {
+  const st = depStatus(d);
+  return { apiVersion:'apps/v1', kind:'Deployment',
+    metadata:{ name:d.name, namespace:'default', labels:d.selector, annotations:{ 'deployment.kubernetes.io/revision':String(d.revision) }, creationTimestamp:iso(d.created) },
+    spec:{ replicas:d.replicas, selector:{ matchLabels:d.selector }, strategy:{ type:'RollingUpdate', rollingUpdate:{ maxSurge:1, maxUnavailable:0 } },
+      template:{ metadata:{ labels:d.template.labels }, spec:{ containers:[{ name:d.template.container, image:d.template.image, resources:{ requests:{ cpu:d.template.cpu + 'm', memory:d.template.mem + 'Mi' } } }] } } },
+    status:{ replicas:st.total, updatedReplicas:st.updated, readyReplicas:st.ready, availableReplicas:st.ready, unavailableReplicas:Math.max(0, d.replicas - st.ready) || undefined } };
+}
+function rsManifest(r) {
+  return { apiVersion:'apps/v1', kind:'ReplicaSet',
+    metadata:{ name:r.name, namespace:'default', labels:{ ...r.template.labels, 'pod-template-hash':r.hash }, annotations:{ 'deployment.kubernetes.io/revision':String(r.revision) },
+      ownerReferences:[{ apiVersion:'apps/v1', kind:'Deployment', name:r.owner, controller:true }] },
+    spec:{ replicas:r.replicas, selector:{ matchLabels:r.selector },
+      template:{ metadata:{ labels:{ ...r.template.labels, 'pod-template-hash':r.hash } }, spec:{ containers:[{ name:r.template.container, image:r.template.image }] } } },
+    status:{ replicas:podsOfRS(r).filter(live).length, readyReplicas:readyCount(r) } };
+}
+function svcManifest(s) {
+  return { apiVersion:'v1', kind:'Service', metadata:{ name:s.name, namespace:'default', creationTimestamp:iso(s.created) },
+    spec:{ type:s.type, clusterIP:s.clusterIP, selector:s.selector, ports:[{ protocol:'TCP', port:s.port, targetPort:s.targetPort, nodePort:s.nodePort || undefined }] },
+    status:{ loadBalancer:s.type === 'LoadBalancer' ? (s.externalIP ? { ingress:[{ ip:s.externalIP }] } : {}) : {} } };
+}
+function nodeManifest(n) {
+  return { apiVersion:'v1', kind:'Node', metadata:{ name:n.name, labels:{ 'kubernetes.io/hostname':n.name, 'kubernetes.io/os':'linux' }, creationTimestamp:iso(n.created) },
+    spec:{ podCIDR:`10.244.${n.idx}.0/24`, unschedulable:n.unschedulable || undefined, taints:nodeTaints(n).length ? nodeTaints(n).map(t => ({ key:t.split(':')[0], effect:t.split(':')[1] })) : undefined },
+    status:{ capacity:{ cpu:String(n.cpu / 1000), memory:n.mem + 'Mi', pods:'110' }, allocatable:{ cpu:n.cpu + 'm', memory:n.mem + 'Mi', pods:'110' },
+      conditions:[{ type:'Ready', status:n.notReadyMarked ? 'Unknown' : 'True', reason:n.notReadyMarked ? 'NodeStatusUnknown' : 'KubeletReady' }],
+      addresses:[{ type:'InternalIP', address:n.ip }, { type:'Hostname', address:n.name }],
+      nodeInfo:{ kubeletVersion:K8S_VERSION, containerRuntimeVersion:'containerd://1.7.13', osImage:'Ubuntu 22.04.4 LTS' } } };
+}
+function nodeTaints(n) {
+  const t = [];
+  if (n.unschedulable) t.push('node.kubernetes.io/unschedulable:NoSchedule');
+  if (n.notReadyMarked) t.push('node.kubernetes.io/unreachable:NoExecute', 'node.kubernetes.io/unreachable:NoSchedule');
+  return t;
+}
+function eventsFor(obj) {
+  const evs = S.events.filter(e => e.obj === obj).sort((a, b) => a.first - b.first);
+  if (!evs.length) return 'Events:          <none>';
+  const rows = [['Type','Reason','Age','From','Message'], ['----','------','----','----','-------'],
+    ...evs.map(e => [e.type, e.reason, e.count > 1 ? `${age(e.time)} (x${e.count} over ${age(e.first)})` : age(e.first), e.from, e.msg])];
+  return 'Events:\n' + table(rows).split('\n').map(l => '  ' + l).join('\n');
+}
+function describePod(p) {
+  const n = p.nodeName && findNode(p.nodeName), lbl = Object.entries(p.labels).map(([k, v]) => `${k}=${v}`);
+  const state = p.state === 'Running' ? `Running\n      Started:      ${new Date(p.startTime).toUTCString()}` : `Waiting\n      Reason:       ${p.state === 'Pending' ? 'ContainerCreating' : p.state}`;
+  return `Name:             ${p.name}
+Namespace:        default
+Priority:         0
+Service Account:  default
+Node:             ${n ? `${n.name}/${n.ip}` : '<none>'}
+Start Time:       ${p.nodeName ? new Date(p.created).toUTCString() : '<none>'}
+Labels:           ${lbl.join('\n                  ') || '<none>'}
+Annotations:      <none>
+Status:           ${p.terminating ? 'Terminating' : p.state === 'Running' ? 'Running' : 'Pending'}
+IP:               ${p.ip || ''}
+Controlled By:    ${p.owner ? 'ReplicaSet/' + p.owner : '<none>'}
+Containers:
+  ${p.container}:
+    Container ID:   ${p.state === 'Running' ? 'containerd://' + p.cid + '…' : ''}
+    Image:          ${p.image}
+    Port:           <none>
+    State:          ${p.nodeName ? state : 'Waiting'}
+    Ready:          ${p.ready ? 'True' : 'False'}
+    Restart Count:  ${p.restarts}
+    Requests:
+      cpu:        ${p.cpu}m
+      memory:     ${p.mem}Mi
+Conditions:
+  Type              Status
+  PodScheduled      ${p.nodeName ? 'True' : 'False'}
+  Initialized       ${p.nodeName ? 'True' : 'False'}
+  ContainersReady   ${p.ready ? 'True' : 'False'}
+  Ready             ${p.ready ? 'True' : 'False'}
+QoS Class:        Burstable
+Node-Selectors:   <none>
+Tolerations:      node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                  node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+${eventsFor('pod/' + p.name)}`;
+}
+function describeNode(n) {
+  const a = nodeAlloc(n), pods = S.pods.filter(p => p.nodeName === n.name && live(p)), t = nodeTaints(n);
+  const pct = (x, y) => Math.round(x / y * 100) + '%';
+  return `Name:               ${n.name}
+Roles:              <none>
+Labels:             kubernetes.io/hostname=${n.name}
+                    kubernetes.io/os=linux
+CreationTimestamp:  ${new Date(n.created).toUTCString()}
+Taints:             ${t.join('\n                    ') || '<none>'}
+Unschedulable:      ${n.unschedulable}
+Conditions:
+  Type     Status   Reason              Message
+  ----     ------   ------              -------
+  Ready    ${n.notReadyMarked ? 'Unknown  NodeStatusUnknown   Kubelet stopped posting node status.' : 'True     KubeletReady        kubelet is posting ready status'}
+Addresses:
+  InternalIP:  ${n.ip}
+  Hostname:    ${n.name}
+Capacity:
+  cpu:     ${n.cpu / 1000}
+  memory:  ${n.mem}Mi
+  pods:    110
+Allocatable:
+  cpu:     ${n.cpu}m
+  memory:  ${n.mem}Mi
+System Info:
+  Kernel Version:             5.15.0-105-generic
+  OS Image:                   Ubuntu 22.04.4 LTS
+  Container Runtime Version:  containerd://1.7.13
+  Kubelet Version:            ${K8S_VERSION}
+PodCIDR:                      10.244.${n.idx}.0/24
+Non-terminated Pods:          (${pods.length} in total)
+${table([['  Namespace','Name','CPU Requests','Memory Requests','Age'], ['  ---------','----','------------','---------------','---'],
+  ...pods.map(p => ['  default', p.name, `${p.cpu}m (${pct(p.cpu, n.cpu)})`, `${p.mem}Mi (${pct(p.mem, n.mem)})`, age(p.created)])])}
+Allocated resources:
+  Resource  Requests
+  --------  --------
+  cpu       ${a.cpu}m (${pct(a.cpu, n.cpu)})
+  memory    ${a.mem}Mi (${pct(a.mem, n.mem)})
+${eventsFor('node/' + n.name)}`;
+}
+function describeDeployment(d) {
+  const st = depStatus(d), rss = rsOfDep(d);
+  const olds = rss.filter(r => r !== st.newRS && podsOfRS(r).filter(live).length);
+  return `Name:                   ${d.name}
+Namespace:              default
+CreationTimestamp:      ${new Date(d.created).toUTCString()}
+Labels:                 ${selStr(d.selector)}
+Annotations:            deployment.kubernetes.io/revision: ${d.revision}
+Selector:               ${selStr(d.selector)}
+Replicas:               ${d.replicas} desired | ${st.updated} updated | ${st.total} total | ${st.ready} available | ${Math.max(0, d.replicas - st.ready)} unavailable
+StrategyType:           RollingUpdate
+MinReadySeconds:        0
+RollingUpdateStrategy:  0 max unavailable, 1 max surge
+Pod Template:
+  Labels:  ${selStr(d.template.labels)}
+  Containers:
+   ${d.template.container}:
+    Image:      ${d.template.image}
+    Requests:
+      cpu:      ${d.template.cpu}m
+      memory:   ${d.template.mem}Mi
+Conditions:
+  Type           Status  Reason
+  ----           ------  ------
+  Available      ${st.ready >= d.replicas ? 'True    MinimumReplicasAvailable' : 'False   MinimumReplicasUnavailable'}
+  Progressing    True    ${d.rolling ? 'ReplicaSetUpdated' : 'NewReplicaSetAvailable'}
+OldReplicaSets:  ${olds.map(r => `${r.name} (${podsOfRS(r).filter(live).length}/${r.replicas} replicas created)`).join(', ') || '<none>'}
+NewReplicaSet:   ${st.newRS ? `${st.newRS.name} (${st.updated}/${st.newRS.replicas} replicas created)` : '<none>'}
+${eventsFor('deployment/' + d.name)}`;
+}
+function describeService(s) {
+  const eps = s.endpoints.map(n => findPod(n)).filter(Boolean).map(p => `${p.ip}:${s.targetPort}`);
+  return `Name:                     ${s.name}
+Namespace:                default
+Labels:                   app=${s.name}
+Selector:                 ${selStr(s.selector)}
+Type:                     ${s.type}
+IP Family Policy:         SingleStack
+IP:                       ${s.clusterIP}
+Port:                     <unset>  ${s.port}/TCP
+TargetPort:               ${s.targetPort}/TCP${s.nodePort ? `\nNodePort:                 <unset>  ${s.nodePort}/TCP` : ''}${s.type === 'LoadBalancer' ? `\nLoadBalancer Ingress:     ${s.externalIP || '<pending>'}` : ''}
+Endpoints:                ${eps.join(',') || '<none>'}
+Session Affinity:         None
+${eventsFor('service/' + s.name)}`;
+}
+
+/** Tiny YAML subset parser (maps, lists, scalars, flow maps, '---' documents). */
+function parseYAMLDocs(src) {
+  return src.split(/^---\s*$/m).map(d => d.trim() ? parseYAML(d) : null).filter(Boolean);
+}
+function parseYAML(text) {
+  const lines = text.split('\n').map((l, n) => ({ n:n + 1, raw:l.replace(/\s+#.*$/, '').replace(/\s+$/, '') }))
+    .filter(l => l.raw.trim() && !l.raw.trim().startsWith('#'))
+    .map(l => ({ n:l.n, ind:l.raw.match(/^ */)[0].length, t:l.raw.trim() }));
+  let i = 0;
+  const scalar = v => {
+    v = v.trim();
+    if (/^".*"$|^'.*'$/.test(v)) return v.slice(1, -1);
+    if (/^-?\d+(\.\d+)?$/.test(v)) return +v;
+    if (v === 'true' || v === 'false') return v === 'true';
+    if (v === 'null' || v === '~' || v === '') return null;
+    if (v === '[]') return [];
+    if (/^\{.*\}$/.test(v)) { const o = {}; v.slice(1, -1).split(',').filter(s => s.trim()).forEach(kv => { const [k, ...r] = kv.split(':'); o[k.trim()] = scalar(r.join(':')); }); return o; }
+    if (/^\[.*\]$/.test(v)) return v.slice(1, -1).split(',').map(scalar);
+    return v;
+  };
+  const isItem = t => t === '-' || t.startsWith('- ');
+  function block(ind) {
+    if (i >= lines.length) return null;
+    if (isItem(lines[i].t)) {
+      const arr = [];
+      while (i < lines.length && lines[i].ind === ind && isItem(lines[i].t)) {
+        const rest = lines[i].t.slice(1).trim();
+        if (!rest) { i++; arr.push(i < lines.length ? block(lines[i].ind) : null); }
+        else if (/^[^"'\s][^:]*:(\s|$)/.test(rest)) { lines[i] = { n:lines[i].n, ind:ind + 2, t:rest }; arr.push(block(ind + 2)); }
+        else { arr.push(scalar(rest)); i++; }
+      }
+      return arr;
+    }
+    const obj = {};
+    while (i < lines.length && lines[i].ind === ind && !isItem(lines[i].t)) {
+      const m = lines[i].t.match(/^([^:]+):(?:\s+(.*))?$/);
+      if (!m) throw new Error(`yaml: line ${lines[i].n}: could not find expected ':'`);
+      i++;
+      const k = m[1].trim().replace(/^["']|["']$/g, ''), v = m[2];
+      if (v !== undefined && v !== '') obj[k] = scalar(v);
+      else if (i < lines.length && (lines[i].ind > ind || (lines[i].ind === ind && isItem(lines[i].t)))) obj[k] = block(lines[i].ind);
+      else obj[k] = null;
+    }
+    if (i < lines.length && lines[i].ind > ind) throw new Error(`yaml: line ${lines[i].n}: mapping values are not allowed in this context`);
+    return obj;
+  }
+  const out = block(lines.length ? lines[0].ind : 0);
+  if (i < lines.length) throw new Error(`yaml: line ${lines[i].n}: did not find expected key`);
+  return out;
+}
+
+/* =====================================================================
+   7. TERMINAL & COMMANDS
+   ===================================================================== */
+function print(text, cls) {
+  const d = document.createElement('div'); d.textContent = text; if (cls) d.className = cls;
+  const out = $('#out'); out.appendChild(d);
+  while (out.children.length > 600) out.removeChild(out.firstChild);
+  out.scrollTop = 1e9;
+}
+function table(rows) {
+  const w = rows[0].map((_, i) => Math.max(...rows.map(r => String(r[i] ?? '').length)));
+  return rows.map(r => r.map((c, i) => i === r.length - 1 ? String(c) : String(c).padEnd(w[i] + 3)).join('')).join('\n');
+}
+function tokenize(line) { return (line.match(/"[^"]*"|'[^']*'|\S+/g) || []).map(t => t.replace(/^["']|["']$/g, '')); }
+const BOOL_FLAGS = ['force','ignore-daemonsets','delete-emptydir-data','all','watch','help','wide'];
+function parseArgs(tokens) {
+  const args = [], flags = {};
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t.startsWith('--')) {
+      const eq = t.indexOf('=');
+      if (eq > 0) flags[t.slice(2, eq)] = t.slice(eq + 1);
+      else { const k = t.slice(2); flags[k] = !BOOL_FLAGS.includes(k) && tokens[i + 1] !== undefined && !tokens[i + 1].startsWith('-') ? tokens[++i] : true; }
+    } else if (/^-[a-zA-Z]$/.test(t)) {
+      const k = { o:'output', f:'filename', n:'namespace', r:'replicas', l:'selector', h:'help', A:'all-namespaces', w:'watch' }[t[1]] || t[1];
+      flags[k] = ['h','A','w'].includes(t[1]) ? true : (tokens[i + 1] !== undefined && !tokens[i + 1].startsWith('-') ? tokens[++i] : true);
+    } else args.push(t);
+  }
+  return { args, flags };
+}
+const KIND = { po:'pod', pod:'pod', pods:'pod', deploy:'deployment', deployment:'deployment', deployments:'deployment', 'deployment.apps':'deployment',
+  svc:'service', service:'service', services:'service', no:'node', node:'node', nodes:'node', rs:'rs', replicaset:'rs', replicasets:'rs',
+  ev:'event', event:'event', events:'event' };
+const PLURAL = { pod:'pods', node:'nodes', deployment:'deployments', service:'services', rs:'replicasets', event:'events' };
+/** Accepts "deployment/web" or "deployment web"; returns {kind, name, rest}. */
+function target(args) {
+  if (!args[0]) return { kind:null };
+  if (args[0].includes('/')) { const [k, n] = args[0].split('/'); return { kind:KIND[k], raw:k, name:n, rest:args.slice(1) }; }
+  return { kind:KIND[args[0]], raw:args[0], name:args[1], rest:args.slice(2) };
+}
+
+/** Write path every mutating command takes: kubectl -> apiserver -> etcd -> reply. */
+async function writePath(desc, act, msg, etcdText) {
+  await step(`<b>kubectl → kube-apiserver</b>: ${desc}. The API server authenticates you, checks <b>RBAC</b>, runs <b>admission controllers</b> and validates the object schema.`, [['kubectl','api',C.req]]);
+  await step(etcdText || `API server persists the object in <b>etcd</b> — the single source of truth. Nothing has <i>run</i> yet; we only changed the desired state.`, [['api','etcd',C.write]], act);
+  await step(`API server replies <b>2xx</b>; kubectl prints the result and exits. Everything else happens <i>asynchronously</i>: controllers watching the API server react.`, [['api','kubectl',C.ok]], () => (Array.isArray(msg) ? msg : [msg]).forEach(m => print(m)));
+}
+async function readPath(desc) {
+  await step(`<b>kubectl → kube-apiserver</b>: GET ${desc}. Reads never involve the scheduler or controllers.`, [['kubectl','api',C.req]]);
+  await step(`API server reads the objects from <b>etcd</b> (in reality usually from its watch cache).`, [['api','etcd',C.write],['etcd','api',C.write]]);
+  await step(`API server returns JSON; kubectl formats it for you.`, [['api','kubectl',C.ok]]);
+}
+async function apiErr(msg, why) {
+  await step(`<b>kubectl → kube-apiserver</b>: request sent.`, [['kubectl','api',C.req]]);
+  await step(`❌ API server rejects the request${why ? ': ' + why : ''}.`, [['api','kubectl',C.del]], () => print(msg, 'err'));
+}
+const notFound = (kind, name) => `Error from server (NotFound): ${{ pod:'pods', deployment:'deployments.apps', service:'services', node:'nodes', rs:'replicasets.apps' }[kind]} "${name}" not found`;
+const err = m => print(m, 'err');
+
+// ---- get ----
+const LIST = {
+  pod: { noun:'pods', prefix:'pod/', items:() => S.pods, find:findPod, manifest:podManifest,
+    head:w => ['NAME','READY','STATUS','RESTARTS','AGE', ...(w ? ['IP','NODE','NOMINATED NODE','READINESS GATES'] : [])],
+    row:(p, w) => [p.name, `${p.ready ? 1 : 0}/1`, podStatus(p), p.restarts, age(p.created), ...(w ? [p.ip || '<none>', p.nodeName || '<none>', '<none>', '<none>'] : [])] },
+  node: { noun:'nodes', prefix:'node/', items:() => S.nodes, find:findNode, manifest:nodeManifest, cluster:true,
+    head:w => ['NAME','STATUS','ROLES','AGE','VERSION', ...(w ? ['INTERNAL-IP','EXTERNAL-IP','OS-IMAGE','KERNEL-VERSION','CONTAINER-RUNTIME'] : [])],
+    row:(n, w) => [n.name, nodeStatusStr(n), '<none>', age(n.created), K8S_VERSION, ...(w ? [n.ip, '<none>', 'Ubuntu 22.04.4 LTS', '5.15.0-105-generic', 'containerd://1.7.13'] : [])] },
+  deployment: { noun:'deployments.apps', prefix:'deployment.apps/', items:() => S.deployments, find:findDep, manifest:depManifest,
+    head:w => ['NAME','READY','UP-TO-DATE','AVAILABLE','AGE', ...(w ? ['CONTAINERS','IMAGES','SELECTOR'] : [])],
+    row:(d, w) => { const s = depStatus(d); return [d.name, `${s.ready}/${d.replicas}`, s.updated, s.ready, age(d.created), ...(w ? [d.template.container, d.template.image, selStr(d.selector)] : [])]; } },
+  rs: { noun:'replicasets.apps', prefix:'replicaset.apps/', items:() => S.replicasets, find:findRS, manifest:rsManifest,
+    head:w => ['NAME','DESIRED','CURRENT','READY','AGE', ...(w ? ['CONTAINERS','IMAGES','SELECTOR'] : [])],
+    row:(r, w) => [r.name, r.replicas, podsOfRS(r).filter(live).length, readyCount(r), age(r.created), ...(w ? [r.template.container, r.template.image, selStr(r.selector)] : [])] },
+  service: { noun:'services', prefix:'service/', items:() => [{ kubeSvc:true, name:'kubernetes' }, ...S.services], find:findSvc, manifest:svcManifest,
+    head:w => ['NAME','TYPE','CLUSTER-IP','EXTERNAL-IP','PORT(S)','AGE', ...(w ? ['SELECTOR'] : [])],
+    row:(s, w) => s.kubeSvc ? ['kubernetes','ClusterIP','10.96.0.1','<none>','443/TCP', age(S.t0), ...(w ? ['<none>'] : [])]
+      : [s.name, s.type, s.clusterIP, s.type === 'LoadBalancer' ? (s.externalIP || '<pending>') : '<none>', s.nodePort ? `${s.port}:${s.nodePort}/TCP` : `${s.port}/TCP`, age(s.created), ...(w ? [selStr(s.selector)] : [])] },
+};
+function eventsTable() {
+  const evs = [...S.events].sort((a, b) => a.time - b.time);
+  if (!evs.length) return 'No resources found in default namespace.';
+  return table([['LAST SEEN','TYPE','REASON','OBJECT','MESSAGE'], ...evs.map(e => [age(e.time), e.type, e.reason, e.obj, e.msg])]);
+}
+
+const CMDS = {
+  async get(args, flags) {
+    let [t, name] = args;
+    if (!t) return err('You must specify the type of resource to get. Use "kubectl api-resources" for a complete list of supported resources.\n\nerror: Required resource not specified.\nUse "kubectl explain <resource>" for a detailed description of that resource (e.g. kubectl explain pods).\nSee \'kubectl get -h\' for help and examples');
+    if (t.includes('/')) [t, name] = t.split('/');
+    const out = flags.output;
+    if (out && out !== true && !['wide','yaml','name'].includes(out)) return err(`error: unable to match a printer suitable for the output format "${out}", allowed formats are: custom-columns,go-template,json,jsonpath,name,template,wide,yaml`);
+    const kinds = t === 'all' ? ['pod','service','deployment','rs'] : t.split(',').map(x => KIND[x]);
+    const badKind = t.split(',').find(x => t !== 'all' && !KIND[x]);
+    if (badKind !== undefined) return apiErr(`error: the server doesn't have a resource type "${badKind}"`, 'unknown resource type');
+    if (kinds.length > 1 && kinds.includes('event')) return err('error: events cannot be combined with other resource types in this simulator');
+    const ns = flags.namespace && flags.namespace !== true ? flags.namespace : 'default';
+    await readPath(`/${kinds.map(k => PLURAL[k]).join(',')}${name ? '/' + name : ''}`);
+    if (kinds[0] === 'event') return print(ns === 'default' ? eventsTable() : `No resources found in ${ns} namespace.`);
+    if (ns !== 'default' && kinds[0] !== 'node') return print(`No resources found in ${ns} namespace.`);
+    const wide = out === 'wide', blocks = [];
+    for (const k of kinds) {
+      const L = LIST[k];
+      if (name) {
+        const o = L.find(name);
+        if (!o) return err(notFound(k, name));
+        if (out === 'yaml') return print(yaml(L.manifest(o)));
+        if (out === 'name') return print(L.prefix + o.name);
+        return print(table([L.head(wide), L.row(o, wide)]));
+      }
+      const items = L.items();
+      if (!items.length) continue;
+      if (out === 'name') { blocks.push(items.map(o => L.prefix + o.name).join('\n')); continue; }
+      if (out === 'yaml') { blocks.push(yaml({ apiVersion:'v1', kind:'List', items:items.filter(o => !o.kubeSvc).map(L.manifest) })); continue; }
+      const head = L.head(wide); if (kinds.length > 1) head[0] = 'NAME';
+      blocks.push(table([head, ...items.map(o => { const r = L.row(o, wide); if (kinds.length > 1) r[0] = L.prefix + r[0]; return r; })]));
+    }
+    print(blocks.length ? blocks.join('\n\n') : kinds[0] === 'node' ? 'No resources found' : `No resources found in ${ns} namespace.`);
+  },
+
+  async describe(args) {
+    const { kind, name } = target(args);
+    if (!kind || !['pod','node','deployment','service'].includes(kind)) return apiErr(`error: the server doesn't have a resource type "${args[0] || ''}"`, 'unknown resource type');
+    if (!name) return err(`error: you must specify the name of the resource to describe`);
+    const o = { pod:findPod, node:findNode, deployment:findDep, service:findSvc }[kind](name);
+    if (!o) return apiErr(notFound(kind, name), 'object not found');
+    await readPath(`${kind}/${name} + related events`);
+    print({ pod:describePod, node:describeNode, deployment:describeDeployment, service:describeService }[kind](o));
+  },
+
+  async run(args, flags) {
+    const name = args[0];
+    if (!name) return err('error: NAME is required for run\nSee \'kubectl run -h\' for help and examples');
+    if (!flags.image || flags.image === true) return err('error: required flag(s) "image" not set');
+    if (!DNS1123.test(name)) return apiErr(`The Pod "${name}" is invalid: metadata.name: Invalid value: "${name}": a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character`, 'invalid name');
+    if (!IMAGE_RE.test(flags.image)) return err(`error: invalid image name "${flags.image}": invalid reference format`);
+    if (findPod(name)) return apiErr(`Error from server (AlreadyExists): pods "${name}" already exists`, 'already exists');
+    await writePath(`POST /api/v1/namespaces/default/pods (a <b>bare Pod</b>, image <code>${esc(flags.image)}</code>)`,
+      () => S.pods.push(makePod({ name, labels:{ run:name }, image:flags.image, container:name, cpu:flags['requests-cpu'] ? parseCPU(flags['requests-cpu']) : DEF_CPU })),
+      `pod/${name} created`);
+    await step(`ℹ️ This is a <b>bare pod</b>: no ReplicaSet owns it, so if it dies or its node fails nothing recreates it. Use a Deployment for self-healing.`);
+  },
+
+  async create(args, flags) {
+    const [sub, name] = args;
+    if (!['deployment','deploy'].includes(sub)) return err(sub ? `error: unknown command "${sub}" for "kubectl create" (this simulator supports: create deployment)` : 'error: must specify one of -f and -k\n\nCreate a resource from a file or from stdin.');
+    if (!name) return err('error: exactly one NAME is required, got 0');
+    if (!flags.image || flags.image === true) return err('error: required flag(s) "image" not set');
+    if (!DNS1123.test(name)) return apiErr(`The Deployment "${name}" is invalid: metadata.name: Invalid value: "${name}": a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters`, 'invalid name');
+    if (!IMAGE_RE.test(flags.image)) return err(`error: invalid image name "${flags.image}": invalid reference format`);
+    const replicas = flags.replicas === undefined ? 1 : parseInt(flags.replicas, 10);
+    if (isNaN(replicas) || replicas < 0 || replicas > 40) return err('error: --replicas must be a number between 0 and 40 in this simulator');
+    if (findDep(name)) return apiErr(`Error from server (AlreadyExists): deployments.apps "${name}" already exists`, 'already exists');
+    await writePath(`POST /apis/apps/v1/namespaces/default/deployments (<b>${name}</b>: ${replicas} × <code>${esc(flags.image)}</code>)`,
+      () => S.deployments.push(makeDeployment({ name, image:flags.image, replicas })), `deployment.apps/${name} created`,
+      `The Deployment (desired state: <b>${replicas}</b> replica(s) of <code>${esc(flags.image)}</code>) is stored in <b>etcd</b>. No ReplicaSet or Pod exists yet!`);
+  },
+
+  async scale(args, flags) {
+    const { kind, name } = target(args);
+    if (kind !== 'deployment') return err(`error: this simulator can scale deployments only (got "${args[0] || ''}")`);
+    if (flags.replicas === undefined) return err('error: required flag(s) "replicas" not set');
+    const n = parseInt(flags.replicas, 10);
+    if (isNaN(n) || n < 0 || n > 40) return err('error: --replicas must be a number between 0 and 40 in this simulator');
+    const d = findDep(name);
+    if (!d) return apiErr(notFound('deployment', name), 'not found');
+    await writePath(`PATCH /apis/apps/v1/namespaces/default/deployments/${name}/scale (replicas ${d.replicas} → <b>${n}</b>)`,
+      () => d.replicas = n, `deployment.apps/${name} scaled`, `Only <code>spec.replicas</code> changes in etcd: ${d.replicas} → <b>${n}</b>. The controllers will close the gap.`);
+  },
+
+  async set(args) {
+    if (args[0] !== 'image') return err(`error: unknown command "${args[0] || ''}" for "kubectl set" (supported: image)`);
+    const { kind, name, rest } = target(args.slice(1));
+    if (kind !== 'deployment') return err('error: usage: kubectl set image deployment/NAME CONTAINER=IMAGE');
+    const d = findDep(name);
+    if (!d) return apiErr(notFound('deployment', name), 'not found');
+    const pairs = (rest || []).filter(x => x.includes('='));
+    if (!pairs.length) return err('error: at least one image update is required');
+    const [c, img] = pairs[0].split('=');
+    if (c !== d.template.container && c !== '*') return err(`error: unable to find container named "${c}"\nHint: the container in deployment/${name} is named "${d.template.container}"`);
+    if (!IMAGE_RE.test(img)) return err(`error: invalid image name "${img}": invalid reference format`);
+    if (img === d.template.image) { await readPath(`deployment/${name}`); return print(`(no change: deployment.apps/${name} already uses ${img})`, 'info'); }
+    await writePath(`PATCH deployment/${name}: <code>spec.template.spec.containers[${c}].image = ${esc(img)}</code>`,
+      () => d.template.image = img, `deployment.apps/${name} image updated`,
+      `The <b>pod template</b> changed in etcd (new template hash) — this is what triggers a <b>rolling update</b>.`);
+  },
+
+  async rollout(args) {
+    const sub = args[0], { kind, name } = target(args.slice(1));
+    if (!['status','undo','history'].includes(sub)) return err(`error: unknown command "${sub || ''}" for "kubectl rollout"\nAvailable: history, status, undo`);
+    if (kind !== 'deployment') return err(`error: usage: kubectl rollout ${sub} deployment/NAME`);
+    const d = findDep(name);
+    if (!d) return apiErr(notFound('deployment', name), 'not found');
+    if (sub === 'history') {
+      await readPath(`replicasets owned by deployment/${name}`);
+      return print(`deployment.apps/${name}\n` + table([['REVISION','CHANGE-CAUSE'], ...rsOfDep(d).sort((a, b) => a.revision - b.revision).map(r => [r.revision, `<none>   (image: ${r.template.image})`])]));
+    }
+    if (sub === 'undo') {
+      const cur = depStatus(d).newRS;
+      const prev = rsOfDep(d).filter(r => r !== cur).sort((a, b) => b.revision - a.revision)[0];
+      if (!prev) return apiErr(`error: no rollout history found for deployment "${name}"`, 'no previous revision');
+      const maxRev = Math.max(...rsOfDep(d).map(r => r.revision));
+      return writePath(`PATCH deployment/${name}: copy the pod template of <b>revision ${prev.revision}</b> (image <code>${esc(prev.template.image)}</code>) back into the Deployment`,
+        () => { d.template = clone(prev.template); prev.revision = maxRev + 1; d.revision = prev.revision; S.stats.undo++; },
+        `deployment.apps/${name} rolled back`,
+        `Rollback = just another template change. The old ReplicaSet ${prev.name} matches again, becomes revision ${maxRev + 1}, and the rolling update runs in reverse.`);
+    }
+    await readPath(`deployment/${name} (watching rollout)`);
+    let last = '';
+    for (let i = 0; i < 100; i++) {
+      const dd = findDep(name); if (!dd) return err(`error: deployment "${name}" was deleted`);
+      const st = depStatus(dd), old = st.total - st.updated;
+      const msg = st.updated < dd.replicas ? `Waiting for deployment "${name}" rollout to finish: ${st.updated} out of ${dd.replicas} new replicas have been updated...`
+        : old > 0 ? `Waiting for deployment "${name}" rollout to finish: ${old} old replicas are pending termination...`
+        : st.newReady < dd.replicas ? `Waiting for deployment "${name}" rollout to finish: ${st.newReady} of ${dd.replicas} updated replicas are available...` : null;
+      if (!msg) return print(`deployment "${name}" successfully rolled out`, 'ok');
+      if (msg !== last) { print(msg); last = msg; }
+      await sleep(250);
+    }
+    print(`error: deployment "${name}" exceeded its progress deadline`, 'err');
+    print('Hint: check `kubectl get pods` and `kubectl describe pod <name>` for the failing new pods.', 'hint');
+  },
+
+  async expose(args, flags) {
+    const { kind, name } = target(args);
+    if (kind !== 'deployment') return err('error: this simulator can expose deployments only: kubectl expose deployment NAME --port=80');
+    const d = findDep(name);
+    if (!d) return apiErr(notFound('deployment', name), 'not found');
+    if (!flags.port || flags.port === true) return err(`error: couldn't find port via --port flag or introspection\nSee 'kubectl expose -h' for help and examples`);
+    const type = flags.type && flags.type !== true ? flags.type : 'ClusterIP';
+    if (!['ClusterIP','NodePort','LoadBalancer'].includes(type)) return err(`error: The Service "${name}" is invalid: spec.type: Unsupported value: "${type}": supported values: "ClusterIP", "ExternalName", "LoadBalancer", "NodePort"`);
+    const sname = flags.name && flags.name !== true ? flags.name : name;
+    if (findSvc(sname)) return apiErr(`Error from server (AlreadyExists): services "${sname}" already exists`, 'already exists');
+    await createService({ name:sname, type, selector:{ ...d.selector }, port:+flags.port, targetPort:+(flags['target-port'] || flags.port) }, `service/${sname} exposed`);
+  },
+
+  async delete(args, flags) {
+    const { kind, raw } = target(args);
+    let names = args[0] && args[0].includes('/') ? [args[0].split('/')[1]] : args.slice(1);
+    if (!kind || !['pod','deployment','service','node','rs'].includes(kind)) return apiErr(`error: the server doesn't have a resource type "${raw || ''}"`, 'unknown resource type');
+    if (flags.all && kind === 'pod') names = S.pods.map(p => p.name);
+    if (!names.length) return err('error: resource(s) were provided, but no name was specified');
+    for (const name of names) {
+      if (kind === 'pod') {
+        const p = findPod(name);
+        if (!p) { await apiErr(notFound('pod', name), 'not found'); continue; }
+        await writePath(`DELETE /api/v1/namespaces/default/pods/${name}`, () => {
+          if (!S.pods.includes(p)) return;
+          const d = depOfPod(p); if (d) S.stats.deletedFrom.add(d.name);
+          markDelete(p);
+        }, `pod "${name}" deleted`, `API server sets <code>deletionTimestamp</code> → pod is <b>Terminating</b>. The kubelet on its node will do the actual killing.`);
+        if (p.owner) await step(`🩹 <b>Self-healing ahead:</b> ${name} is owned by ReplicaSet ${p.owner}. Its controller will see actual &lt; desired and create a replacement.`);
+      } else if (kind === 'deployment') {
+        const d = findDep(name);
+        if (!d) { await apiErr(notFound('deployment', name), 'not found'); continue; }
+        await writePath(`DELETE /apis/apps/v1/namespaces/default/deployments/${name} (propagationPolicy=Background)`,
+          () => { S.deployments = S.deployments.filter(x => x !== d); }, `deployment.apps "${name}" deleted`,
+          `Deployment removed from etcd. Its ReplicaSets and Pods still exist for a moment — the <b>garbage collector</b> will cascade the delete.`);
+      } else if (kind === 'rs') {
+        const r = findRS(name);
+        if (!r) { await apiErr(notFound('rs', name), 'not found'); continue; }
+        await writePath(`DELETE replicaset/${name}`, () => { S.replicasets = S.replicasets.filter(x => x !== r); }, `replicaset.apps "${name}" deleted`);
+      } else if (kind === 'service') {
+        const s = findSvc(name);
+        if (!s) { await apiErr(notFound('service', name), 'not found'); continue; }
+        await writePath(`DELETE /api/v1/namespaces/default/services/${name}`, () => { S.services = S.services.filter(x => x !== s); }, `service "${name}" deleted`);
+        await step(`Every <b>kube-proxy</b> sees the Service vanish and removes its iptables rules; ClusterIP ${s.clusterIP} is released.`, [S.nodes.filter(n => n.ready).map(n => ['api', 'proxy:' + n.name, C.del])].filter(h => h.length));
+      } else if (kind === 'node') {
+        const n = findNode(name);
+        if (!n) { await apiErr(notFound('node', name), 'not found'); continue; }
+        await writePath(`DELETE /api/v1/nodes/${name}`, () => { S.nodes = S.nodes.filter(x => x !== n); }, `node "${name}" deleted`,
+          `Node object removed. (The machine may still be running, but the cluster forgets it.) <b>PodGC</b> will clean up its pods.`);
+      }
+    }
+  },
+
+  async cordon(args) { return cordonCmd(args[0], true); },
+  async uncordon(args) { return cordonCmd(args[0], false); },
+
+  async drain(args, flags) {
+    const n = findNode(args[0]);
+    if (!args[0]) return err('error: USAGE: drain NODE [flags]');
+    if (!n) return apiErr(notFound('node', args[0]), 'not found');
+    if (!n.unschedulable) await writePath(`PATCH node/${n.name} spec.unschedulable=true`, () => n.unschedulable = true, `node/${n.name} cordoned`, `Step 1 of drain = <b>cordon</b>: the scheduler will no longer place pods here.`);
+    else print(`node/${n.name} already cordoned`);
+    const pods = S.pods.filter(p => p.nodeName === n.name && live(p));
+    const bare = pods.filter(p => !p.owner);
+    if (bare.length && !flags.force) {
+      await step(`❌ Drain refuses to evict <b>bare pods</b> (${bare.map(p => p.name).join(', ')}): nothing would recreate them. Use <code>--force</code> to accept losing them.`);
+      print(`error: unable to drain node "${n.name}" due to error: cannot delete Pods that declare no controller (use --force to override): ${bare.map(p => 'default/' + p.name).join(', ')}, continuing command...\nThere are pending nodes to be drained:\n ${n.name}\ncannot delete Pods that declare no controller (use --force to override): ${bare.map(p => 'default/' + p.name).join(', ')}`, 'err');
+      return;
+    }
+    if (bare.length) print(`Warning: deleting Pods that declare no controller: ${bare.map(p => 'default/' + p.name).join(', ')}`, 'hint');
+    if (!pods.length) { S.stats.drained++; return print(`node/${n.name} drained`); }
+    pods.forEach(p => print(`evicting pod default/${p.name}`));
+    await step(`Step 2 of drain: kubectl POSTs an <b>Eviction</b> for each pod (respecting PodDisruptionBudgets). Owned pods will be recreated by their ReplicaSets on <i>other</i> nodes.`,
+      [['kubectl','api',C.req],['api','etcd',C.del]], () => pods.forEach(p => { if (S.pods.includes(p)) markDelete(p); }));
+    for (let i = 0; i < 80 && pods.some(p => S.pods.includes(p)); i++) await sleep(200);
+    pods.forEach(p => print(`pod/${p.name} evicted`));
+    S.stats.drained++;
+    print(`node/${n.name} drained`);
+  },
+
+  async logs(args, flags) {
+    let { kind, name } = args[0] && args[0].includes('/') ? target(args) : { kind:'pod', name:args[0] };
+    if (!name) return err('error: expected \'logs [-f] [-p] (POD | TYPE/NAME) [-c CONTAINER]\'.\nPOD or TYPE/NAME is a required argument for the logs command');
+    let p;
+    if (kind === 'deployment') {
+      const d = findDep(name);
+      if (!d) return apiErr(notFound('deployment', name), 'not found');
+      const pods = rsOfDep(d).flatMap(podsOfRS);
+      p = pods.find(x => x.state === 'Running') || pods[0];
+      if (!p) return err(`error: timed out waiting for the condition`);
+      if (pods.length > 1) print(`Found ${pods.length} pods, using pod/${p.name}`, 'info');
+    } else {
+      p = findPod(name);
+      if (!p) return apiErr(notFound('pod', name), 'not found');
+    }
+    const K = p.nodeName ? 'kubelet:' + p.nodeName : null;
+    await step(`<b>kubectl → kube-apiserver</b>: GET pods/${p.name}/log. Logs are <i>not</i> stored in etcd…`, [['kubectl','api',C.req]]);
+    if (!K || p.state !== 'Running') {
+      return step(`…the API server would proxy to the kubelet, but the container isn't running.`, [['api','kubectl',C.del]], () =>
+        print(`Error from server (BadRequest): container "${p.container}" in pod "${p.name}" is waiting to start: ${p.state === 'ImagePullBackOff' ? 'trying and failing to pull image' : 'ContainerCreating'}`, 'err'));
+    }
+    await step(`…the API server proxies to the <b>kubelet</b> on ${p.nodeName}, which reads the container's log file via the runtime.`, [['api',K,C.req],[K,'rt:' + p.nodeName,C.req],['rt:' + p.nodeName,K,C.ok],[K,'api',C.ok]]);
+    await step(`Log stream returned to kubectl.`, [['api','kubectl',C.ok]], () => {
+      const tail = flags.tail && flags.tail !== true ? parseInt(flags.tail, 10) : 0;
+      print((tail ? p.logs.slice(-tail) : p.logs).join('\n') || '');
+    });
+  },
+
+  async apply(args, flags) {
+    if (!flags.filename) return err('error: must specify one of -f and -k');
+    const text = await openYamlEditor();
+    if (text == null) return print('apply cancelled', 'info');
+    let docs;
+    try { docs = parseYAMLDocs(text); } catch (e) { return err(`error: error parsing STDIN: error converting YAML to JSON: ${e.message}`); }
+    if (!docs.length) return err('error: no objects passed to apply');
+    for (const doc of docs) await applyDoc(doc);
+  },
+};
+
+async function cordonCmd(name, on) {
+  if (!name) return err(`error: USAGE: ${on ? 'cordon' : 'uncordon'} NODE [flags]`);
+  const n = findNode(name);
+  if (!n) return apiErr(notFound('node', name), 'not found');
+  if (n.unschedulable === on) { await readPath('node/' + name); return print(`node/${name} already ${on ? 'cordoned' : 'uncordoned'}`); }
+  await writePath(`PATCH node/${name} <code>spec.unschedulable=${on}</code>`, () => n.unschedulable = on, `node/${name} ${on ? 'cordoned' : 'uncordoned'}`,
+    on ? `Node marked unschedulable (taint <code>node.kubernetes.io/unschedulable:NoSchedule</code>). Existing pods keep running; new pods won't land here.`
+       : `Node is schedulable again. Note: existing pods are <b>not</b> moved back automatically.`);
+}
+
+async function createService(spec, msg) {
+  const s = { kind:'Service', ...spec, created:now(), endpoints:[], epSig:null, rr:0,
+    clusterIP:`10.96.${1 + Math.floor(Math.random() * 250)}.${1 + Math.floor(Math.random() * 250)}`,
+    nodePort:spec.type !== 'ClusterIP' ? spec.nodePort || 30000 + Math.floor(Math.random() * 2767) : null, externalIP:null };
+  await writePath(`POST /api/v1/namespaces/default/services (<b>${s.name}</b>, type ${s.type}, selector <code>${selStr(s.selector)}</code>)`,
+    () => S.services.push(s), msg, `API server allocates a stable virtual IP <b>${s.clusterIP}</b>${s.nodePort ? ` and NodePort <b>${s.nodePort}</b> on every node` : ''}, then stores the Service in etcd.`);
+  if (s.type === 'LoadBalancer')
+    await step(`<b>cloud-controller-manager</b> (running alongside the controller-manager) asks the cloud provider for an external load balancer and writes its IP into <code>status.loadBalancer</code>.`,
+      [['api','cm',C.watch],['cm','api',C.req]], () => s.externalIP = `34.${100 + Math.floor(Math.random() * 120)}.${Math.floor(Math.random() * 250)}.${1 + Math.floor(Math.random() * 250)}`);
+}
+
+async function applyDoc(doc) {
+  const kind = doc.kind, md = doc.metadata || {}, name = md.name;
+  if (!kind || !doc.apiVersion) return err('error: error validating data: [apiVersion not set, kind not set]; if you choose to ignore these errors, turn validation off with --validate=false');
+  if (!name || !DNS1123.test(String(name))) return err(`error: error validating "STDIN": metadata.name: Required value / invalid value "${name || ''}"`);
+  const spec = doc.spec || {};
+  if (kind === 'Deployment') {
+    const tpl = (spec.template || {}), c = ((tpl.spec || {}).containers || [])[0];
+    if (!c || !c.image || !c.name) return err(`The Deployment "${name}" is invalid: spec.template.spec.containers: Required value`);
+    if (!IMAGE_RE.test(String(c.image))) return err(`The Deployment "${name}" is invalid: spec.template.spec.containers[0].image: invalid reference format`);
+    const sel = (spec.selector || {}).matchLabels || {}, labels = (tpl.metadata || {}).labels || {};
+    if (!Object.keys(sel).length) return err(`The Deployment "${name}" is invalid: spec.selector: Required value`);
+    if (!matches(sel, labels)) return err(`The Deployment "${name}" is invalid: spec.template.metadata.labels: Invalid value: ${JSON.stringify(labels)}: \`selector\` does not match template \`labels\``);
+    const req = ((c.resources || {}).requests) || {};
+    const cpu = parseCPU(req.cpu), mem = parseMem(req.memory), replicas = spec.replicas == null ? 1 : +spec.replicas;
+    if (isNaN(cpu) || isNaN(mem) || cpu <= 0) return err(`The Deployment "${name}" is invalid: resources.requests: invalid quantity`);
+    if (isNaN(replicas) || replicas < 0 || replicas > 40) return err(`The Deployment "${name}" is invalid: spec.replicas must be 0..40 in this simulator`);
+    const template = { labels:{ ...labels }, container:String(c.name), image:String(c.image), cpu, mem };
+    const d = findDep(name);
+    if (!d) return writePath(`POST deployment <b>${name}</b> (server-side apply)`, () => S.deployments.push({ ...makeDeployment({ name, image:template.image, replicas }), selector:{ ...sel }, template }), `deployment.apps/${name} created`);
+    if (JSON.stringify(d.selector) !== JSON.stringify(sel)) return err(`The Deployment "${name}" is invalid: spec.selector: Invalid value: field is immutable`);
+    if (d.replicas === replicas && JSON.stringify(d.template) === JSON.stringify(template)) { await readPath('deployment/' + name); return print(`deployment.apps/${name} unchanged`); }
+    return writePath(`PATCH deployment <b>${name}</b> (apply computes a diff against the live object)`, () => { d.replicas = replicas; d.template = template; }, `deployment.apps/${name} configured`);
+  }
+  if (kind === 'Service') {
+    const p = (spec.ports || [])[0];
+    if (!p || !p.port) return err(`The Service "${name}" is invalid: spec.ports: Required value`);
+    const type = spec.type || 'ClusterIP';
+    if (!['ClusterIP','NodePort','LoadBalancer'].includes(type)) return err(`The Service "${name}" is invalid: spec.type: Unsupported value: "${type}"`);
+    const sel = spec.selector || {};
+    const s = findSvc(name);
+    if (!s) return createService({ name, type, selector:{ ...sel }, port:+p.port, targetPort:+(p.targetPort || p.port), nodePort:p.nodePort ? +p.nodePort : null }, `service/${name} created`);
+    return writePath(`PATCH service <b>${name}</b>`, () => { Object.assign(s, { type, selector:{ ...sel }, port:+p.port, targetPort:+(p.targetPort || p.port), epSig:null }); if (type !== 'ClusterIP' && !s.nodePort) s.nodePort = 30000 + Math.floor(Math.random() * 2767); }, `service/${name} configured`);
+  }
+  if (kind === 'Pod') {
+    const c = (spec.containers || [])[0];
+    if (!c || !c.image) return err(`The Pod "${name}" is invalid: spec.containers: Required value`);
+    if (findPod(name)) return print(`pod/${name} unchanged`);
+    const req = ((c.resources || {}).requests) || {};
+    return writePath(`POST pod <b>${name}</b>`, () => S.pods.push(makePod({ name, labels:md.labels || { run:name }, image:String(c.image), container:String(c.name || name), cpu:parseCPU(req.cpu), mem:parseMem(req.memory) })), `pod/${name} created`);
+  }
+  err(`error: resource mapping not found for name: "${name}" namespace: "" from "STDIN": no matches for kind "${kind}" in version "${doc.apiVersion}"\nensure CRDs are installed first`);
+}
+
+// ---- curl through a Service (round-robin across ready endpoints) ----
+async function curlCmd(args) {
+  const raw = args[0];
+  if (!raw) return err('curl: try \'curl <service> [count]\'');
+  const host = raw.replace(/^https?:\/\//, '').split('/')[0].split(':')[0].replace(/\.default(\.svc(\.cluster\.local)?)?$/, '');
+  const count = Math.max(1, Math.min(20, parseInt(args[1], 10) || 1));
+  const s = S.services.find(x => x.name === host || x.clusterIP === host || x.externalIP === host);
+  if (!s) return print(`curl: (6) Could not resolve host: ${host}\nHint: curl a Service name — create one with "kubectl expose deployment <name> --port=80".`, 'err');
+  const entry = s.type === 'LoadBalancer' ? `external LB ${s.externalIP || '<pending>'} → NodePort ${s.nodePort}` : s.type === 'NodePort' ? `&lt;nodeIP&gt;:${s.nodePort}` : `ClusterIP ${s.clusterIP}:${s.port}`;
+  await step(`🌐 Client sends HTTP to <b>${entry}</b>. A Service is not a process — it's a virtual IP that <b>kube-proxy</b>'s iptables rules DNAT to a ready pod. Rotation here is round-robin (real iptables mode picks randomly).`);
+  for (let i = 0; i < count; i++) {
+    if (!s.endpoints.length) { await step(`No ready endpoints for <b>${s.name}</b> → connection refused.`, [['client','svc:' + s.name,C.del]], () => print(`curl: (7) Failed to connect to ${host} port ${s.port} after 0 ms: Couldn't connect to server`, 'err')); return; }
+    const pname = s.endpoints[s.rr++ % s.endpoints.length], p = findPod(pname);
+    if (!p || !p.ready || !p.nodeName) { await step(`Stale endpoint ${pname} (not yet removed by the EndpointSlice controller) → this request fails.`, [['client','svc:' + s.name,C.del]], () => print(`curl: (7) Failed to connect to ${host} port ${s.port}: Connection refused`, 'err')); continue; }
+    await step(`Request ${i + 1}/${count}: iptables on <b>${p.nodeName}</b> picks endpoint <b>${p.name}</b> (${p.ip}:${s.targetPort}).`,
+      [['client','svc:' + s.name,C.traffic],['svc:' + s.name,'proxy:' + p.nodeName,C.traffic],['proxy:' + p.nodeName,'pod:' + p.name,C.traffic],['pod:' + p.name,'client',C.ok]], () => {
+        const b = imageBase(p.image);
+        print(b === 'nginx' ? `<title>Welcome to nginx!</title>  ← served by ${p.name} (${p.ip}) on ${p.nodeName}` : `HTTP/1.1 200 OK  "hello from ${p.name}" (${p.ip}, ${b}) on ${p.nodeName}`, 'ok');
+        p.logs.push(`10.244.0.1 - - [${new Date().toUTCString()}] "GET / HTTP/1.1" 200 615 "-" "curl/8.5.0" "-"`);
+        (S.stats.curl[s.name] = S.stats.curl[s.name] || new Set()).add(p.name);
+      });
+  }
+}
+
+const HELP = `kubectl circuit-board simulator — the "kubectl"/"k" prefix is optional.
+
+ Inspect
+  kubectl get pods|nodes|deployments|rs|services|events|all [NAME] [-o wide|yaml|name]
+  kubectl describe pod|node|deployment|service NAME
+  kubectl logs POD | deployment/NAME [--tail=N]
+ Create & change
+  kubectl run NAME --image=IMG
+  kubectl create deployment NAME --image=IMG [--replicas=N]
+  kubectl apply -f            (opens a YAML editor: Deployment / Service / Pod)
+  kubectl scale deployment NAME --replicas=N
+  kubectl set image deployment/NAME CONTAINER=IMG
+  kubectl rollout status|undo|history deployment/NAME
+  kubectl expose deployment NAME --port=80 [--target-port=8080] [--type=ClusterIP|NodePort|LoadBalancer]
+  kubectl delete pod|deployment|service|node|rs NAME   (delete pods --all)
+ Nodes
+  kubectl cordon NODE | uncordon NODE | drain NODE [--ignore-daemonsets] [--force]
+ Traffic
+  curl SERVICE [COUNT]        send HTTP requests through a Service (watch round-robin)
+ Shell
+  help, clear, ↑/↓ history, Tab completion
+
+Tips: images with typos like "ngnix" fail to pull. Click any chip/pod/node for a detail card.`;
+
+async function exec(line) {
+  print('$ ' + line, 'in');
+  S.history.push(line);
+  const toks = tokenize(line);
+  if (!toks.length) return;
+  if (toks[0] === 'help' || (/^(kubectl|k)$/.test(toks[0]) && (!toks[1] || toks[1] === 'help' || toks[1] === '--help'))) return print(HELP, 'info');
+  if (toks[0] === 'clear') { $('#out').innerHTML = ''; return; }
+  if (toks[0] === 'curl') { beginTrace('$ ' + line); return curlCmd(toks.slice(1)); }
+  let rest = toks;
+  if (/^(kubectl|k)$/.test(toks[0])) rest = toks.slice(1);
+  else if (!CMDS[toks[0]]) {
+    const near = ['kubectl', 'curl', 'help', 'clear', ...Object.keys(CMDS)].find(c => levenshtein(c, toks[0]) <= 2);
+    return print(`bash: ${toks[0]}: command not found${near ? `\nDid you mean "${near}"?` : ''}\nHint: commands start with "kubectl" (or "k"). Type "help".`, 'err');
+  }
+  const { args, flags } = parseArgs(rest);
+  const verb = args[0];
+  if (!verb) return print(HELP, 'info');
+  if (!CMDS[verb]) {
+    const sugg = Object.keys(CMDS).filter(c => levenshtein(c, verb) <= 2);
+    return print(`error: unknown command "${verb}" for "kubectl"${sugg.length ? `\n\nDid you mean this?\n\t${sugg.join('\n\t')}` : ''}\n\nRun 'kubectl --help' for usage.`, 'err');
+  }
+  beginTrace('$ ' + line);
+  await CMDS[verb](args.slice(1), flags);
+}
+
+// ---- command queue, history, tab completion ----
+let chain = Promise.resolve(), queued = 0;
+function enqueue(fn) {
+  queued++; $('#busy').textContent = '⏳ running…';
+  chain = chain.then(fn).catch(e => { if (e.message !== 'reset') { console.error(e); print('internal error: ' + e.message, 'err'); } })
+    .finally(() => { if (--queued === 0) $('#busy').textContent = ''; checkLesson(); });
+}
+const runCmd = line => enqueue(() => exec(line));
+const hist = []; let hi = 0;
+const cmdEl = $('#cmd');
+cmdEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { const v = cmdEl.value.trim(); cmdEl.value = ''; if (!v) return; hist.push(v); hi = hist.length; runCmd(v); }
+  else if (e.key === 'ArrowUp') { if (hi > 0) cmdEl.value = hist[--hi]; e.preventDefault(); }
+  else if (e.key === 'ArrowDown') { hi = Math.min(hist.length, hi + 1); cmdEl.value = hist[hi] || ''; e.preventDefault(); }
+  else if (e.key === 'Tab') { e.preventDefault(); tabComplete(); }
+});
+function completions(prev, cur) {
+  const verbs = Object.keys(CMDS);
+  if (cur.startsWith('-')) return ['--image=','--replicas=','--port=','--target-port=','--type=','-o','--force','--ignore-daemonsets','--tail=','--all','-f'];
+  if (!prev.length) return ['kubectl','curl','help','clear', ...verbs];
+  if (prev[0] === 'curl') return prev.length === 1 ? S.services.map(s => s.name) : [];
+  const rel = /^(kubectl|k)$/.test(prev[0]) ? prev.slice(1) : prev;
+  if (!rel.length) return verbs;
+  const [verb] = rel, pos = rel.length;
+  const names = k => ({ pod:S.pods, deployment:S.deployments, service:S.services, node:S.nodes, rs:S.replicasets }[k] || []).map(o => o.name);
+  if (prev[prev.length - 1] === '-o') return ['wide','yaml','name'];
+  if (cur.startsWith('--type=')) return ['--type=ClusterIP','--type=NodePort','--type=LoadBalancer'];
+  if (['drain','cordon','uncordon'].includes(verb)) return pos === 1 ? names('node') : [];
+  if (verb === 'logs') return pos === 1 ? [...names('pod'), ...names('deployment').map(n => 'deployment/' + n)] : [];
+  if (verb === 'apply') return ['-f'];
+  if (verb === 'rollout') return pos === 1 ? ['status','undo','history'] : pos === 2 ? names('deployment').map(n => 'deployment/' + n) : [];
+  if (verb === 'set') return pos === 1 ? ['image'] : pos === 2 ? names('deployment').map(n => 'deployment/' + n) : pos === 3 ? (findDep((rel[2] || '').split('/')[1]) ? [findDep(rel[2].split('/')[1]).template.container + '='] : []) : [];
+  if (verb === 'create') return pos === 1 ? ['deployment'] : [];
+  if (verb === 'run') return [];
+  const types = { get:['pods','nodes','deployments','rs','services','events','all'], describe:['pod','node','deployment','service'], delete:['pod','deployment','service','node','rs'], scale:['deployment'], expose:['deployment'] }[verb] || [];
+  if (pos === 1) return types;
+  if (pos >= 2 && KIND[rel[1]]) return names(KIND[rel[1]]);
+  return [];
+}
+function tabComplete() {
+  const v = cmdEl.value, toks = v.split(/\s+/), cur = toks.pop(), prev = toks.filter(Boolean);
+  const m = completions(prev, cur).filter(c => c.startsWith(cur));
+  if (!m.length) return;
+  let fill = m[0];
+  if (m.length > 1) {
+    fill = m.reduce((a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i++; return a.slice(0, i); });
+    if (fill === cur) { print(m.join('   '), 'info'); return; }
+  }
+  const sp = m.length === 1 && !/[=\/]$/.test(fill) ? ' ' : '';
+  cmdEl.value = (prev.length ? v.slice(0, v.length - cur.length) : '') + fill + sp;
+}
+
+/* =====================================================================
+   8. CLUSTER ACTIONS (buttons): nodes, Break it, Explain this, reset
+   ===================================================================== */
+async function addNode() {
+  if (S.nodes.length >= MAX_NODES) return print(`This board fits at most ${MAX_NODES} nodes.`, 'err');
+  beginTrace('＋ Node: a new machine joins the cluster');
+  const n = makeNode(); n.ready = false; n.notReadyMarked = true; n.downSince = now() + 1e9;
+  S.nodes.push(n); scheduleRender(); await sleep(50);
+  await step(`A new machine boots <b>${n.name}</b>. kubelet, kube-proxy and containerd start. kubelet <b>registers</b> a Node object (POST /api/v1/nodes) and starts heartbeating.`,
+    [['kubelet:' + n.name,'api',C.req],['api','etcd',C.write]], () => {
+      Object.assign(n, { ready:true, notReadyMarked:false, downSince:0 });
+      ev('Normal', 'RegisteredNode', 'node/' + n.name, `Node ${n.name} event: Registered Node ${n.name} in Controller`, 'node-controller');
+      ev('Normal', 'NodeReady', 'node/' + n.name, `Node ${n.name} status is now: NodeReady`, 'kubelet');
+    });
+  await step(`Node is <b>Ready</b>. Note: running pods are <b>not</b> rebalanced onto it — only new or Pending pods can land here.`);
+}
+async function powerOff(n, remove) {
+  beginTrace(`💥 ${n.name} ${remove ? 'is removed (machine failure)' : 'loses power'}`);
+  const a = anchor('node:' + n.name);
+  if (a) { sparks(a.x, a.y, true); hotOn('node:' + n.name, 900); }
+  await step(`💥 <b>${n.name}</b> ${remove ? 'is pulled from the rack' : 'loses power'}! Its kubelet stops renewing its Lease (heartbeat). Pods on it are frozen — but the API server doesn't know yet.`, [], () => {
+    Object.assign(n, { ready:false, downSince:now(), deleting:!!remove });
+    S.stats.nodeFailed++;
+  });
+}
+async function powerOn(n) {
+  beginTrace(`🔌 ${n.name} powers back on`);
+  await step(`🔌 <b>${n.name}</b> boots. kubelet re-registers and heartbeats → node <b>Ready</b> again.`, [['kubelet:' + n.name,'api',C.ok],['api','etcd',C.write]], () => {
+    Object.assign(n, { ready:true, notReadyMarked:false, downSince:0, deleting:false });
+    ev('Normal', 'NodeReady', 'node/' + n.name, `Node ${n.name} status is now: NodeReady`, 'kubelet');
+  });
+}
+async function breakIt() {
+  const options = [];
+  if (S.nodes.filter(n => n.ready).length > 1) options.push('node');
+  options.push('image', 'resources');
+  const pick = options[Math.floor(Math.random() * options.length)];
+  beginTrace('⚡ Break it: a random failure was injected');
+  print('⚡ Something just broke in the cluster! Investigate with: kubectl get pods / get nodes / describe … / logs … / get events', 'hint');
+  if (pick === 'node') {
+    const cands = S.nodes.filter(n => n.ready).sort((a, b) => nodeAlloc(b).count - nodeAlloc(a).count);
+    return powerOff(cands[0], false);
+  }
+  if (pick === 'image') {
+    const d = S.deployments[Math.floor(Math.random() * S.deployments.length)];
+    if (d) {
+      const bad = d.template.image.includes('nginx') ? d.template.image.replace('nginx', 'ngnix') : imageBase(d.template.image) + ':latst';
+      return step(`A teammate's CI pipeline PATCHed deployment <b>${d.name}</b> with a new image… 🤔`, [['client','api',C.req],['api','etcd',C.write]], () => { d.template.image = bad; });
+    }
+    const pn = findDep('payments') ? 'payments-' + rand(3) : 'payments';
+    return step(`A teammate deployed <b>${pn}</b> (2 replicas)… 🤔`, [['client','api',C.req],['api','etcd',C.write]], () => S.deployments.push(makeDeployment({ name:pn, image:'ngnix:1.27', replicas:2 })));
+  }
+  const name = findDep('ml-training') ? 'ml-training-' + rand(3) : 'ml-training';
+  // Each node fits only one 1500m pod, so one more replica than Ready nodes can never all be placed.
+  const replicas = Math.max(2, S.nodes.filter(n => n.ready).length + 1);
+  return step(`A teammate deployed <b>${name}</b>: ${replicas} replicas, each requesting <b>1500m CPU / 2Gi</b>… 🤔`, [['client','api',C.req],['api','etcd',C.write]],
+    () => S.deployments.push(makeDeployment({ name, image:'python:3.12', replicas, cpu:1500, mem:2048 })));
+}
+async function replay() {
+  const t = lastTrace;
+  if (!t || !t.steps.length) return print('Nothing to explain yet — run a command first.', 'info');
+  replaying = true;
+  $('#explainTitle').textContent = '⟲ Slow-motion replay: ' + t.title;
+  $('#steps').innerHTML = '';
+  const steps = t.steps.slice(0, 60), lis = steps.map(s => addStepLi(s.text, 'pending'));
+  try {
+    for (let i = 0; i < steps.length; i++) {
+      lis[i].className = 'active'; lis[i].scrollIntoView({ block:'nearest' });
+      await runHops(steps[i].hops);
+      await sleep(steps[i].hops.length ? 250 : 1400);
+      lis[i].className = '';
+    }
+  } finally { replaying = false; }
+}
+function resetCluster() {
+  S = freshState();
+  for (let i = 0; i < 3; i++) S.nodes.push(makeNode());
+  trace = null; lastTrace = null;
+  $('#explainTitle').textContent = 'Cluster reset: 3 empty worker nodes. Type a command or open 📘 Lessons.';
+  $('#steps').innerHTML = '';
+  $('#fx').innerHTML = '';
+  render();
+}
+
+/* =====================================================================
+   9. TOOLTIPS, DETAIL CARDS, MODALS
+   ===================================================================== */
+function objFromId(id) {
+  const [k, n] = id.split(/:(.+)/);
+  return { k, n, o:{ pod:findPod, node:findNode, svc:findSvc, dep:findDep, rs:findRS, kubelet:findNode, rt:findNode, proxy:findNode }[k]?.(n) };
+}
+function tipFor(id) {
+  if (CP[id]) {
+    const st = { kubectl:`${S.history.length} command(s) sent`, client:`${Object.values(S.stats.curl).reduce((a, s) => a + s.size, 0)} distinct pods reached`,
+      api:`${S.pods.length + S.deployments.length + S.replicasets.length + S.services.length + S.nodes.length} objects served`,
+      etcd:`${S.pods.length + S.deployments.length + S.replicasets.length + S.services.length + S.nodes.length + S.events.length} keys stored`,
+      sched:`${pendingPods().length} pod(s) waiting for a node`, cm:`${S.deployments.length} deployments · ${S.replicasets.length} replicasets watched` }[id];
+    return `<b>${CP[id].label}</b><br>${CP[id].desc}<span class="st">State: ${st}</span>`;
+  }
+  const { k, o } = objFromId(id);
+  if (!o) return '';
+  if (k === 'pod') return `<b>Pod ${esc(o.name)}</b><br>Smallest deployable unit: one or more containers sharing an IP.<span class="st">${podStatus(o)} · ${o.nodeName || 'unscheduled'} · ${o.ip || 'no IP'}<br>image ${esc(o.image)} · ${o.cpu}m / ${o.mem}Mi${o.schedMsg ? '<br>⚠ ' + esc(o.schedMsg) : ''}</span>`;
+  if (k === 'node') { const a = nodeAlloc(o); return `<b>Node ${o.name}</b><br>A worker machine (VM or physical) that runs pods.<span class="st">${nodeStatusStr(o)}${o.ready ? '' : ' (no heartbeat)'} · ${a.count} pods · CPU ${a.cpu}/${o.cpu}m · MEM ${a.mem}/${o.mem}Mi</span>`; }
+  if (k === 'kubelet') return `<b>kubelet @ ${o.name}</b><br>${NODE_DESC.kubelet}<span class="st">${o.ready ? 'heartbeating' : 'DOWN — no heartbeat'} · ${S.pods.filter(p => p.nodeName === o.name).length} pods</span>`;
+  if (k === 'rt') return `<b>containerd @ ${o.name}</b><br>${NODE_DESC.rt}<span class="st">${S.pods.filter(p => p.nodeName === o.name && p.state === 'Running').length} containers running</span>`;
+  if (k === 'proxy') return `<b>kube-proxy @ ${o.name}</b><br>${NODE_DESC.proxy}<span class="st">${S.services.length} service rule set(s)</span>`;
+  if (k === 'svc') return `<b>Service ${o.name}</b> (${o.type})<br>A stable virtual IP + DNS name that load-balances to pods matching its selector.<span class="st">${o.clusterIP}:${o.port} · selector ${selStr(o.selector)} · ${o.endpoints.length} endpoint(s)</span>`;
+  if (k === 'dep') { const st = depStatus(o); return `<b>Deployment ${o.name}</b><br>Declares desired pods + update strategy; manages ReplicaSets.<span class="st">${st.ready}/${o.replicas} ready · revision ${o.revision}${o.rolling ? ' · rolling update in progress' : ''}</span>`; }
+  if (k === 'rs') return `<b>ReplicaSet ${o.name}</b><br>Keeps exactly N identical pods (one pod-template version) running.<span class="st">revision ${o.revision} · ${readyCount(o)}/${o.replicas} ready · ${esc(o.template.image)}</span>`;
+  return '';
+}
+const tip = $('#tip');
+$('#board').addEventListener('mousemove', e => {
+  const el = e.target.closest('[data-id]');
+  if (!el) return tip.classList.add('hidden');
+  const html = tipFor(el.dataset.id);
+  if (!html) return tip.classList.add('hidden');
+  tip.innerHTML = html; tip.classList.remove('hidden');
+  const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8);
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+});
+$('#board').addEventListener('mouseleave', () => tip.classList.add('hidden'));
+$('#board').addEventListener('click', e => { const el = e.target.closest('[data-id]'); if (el) { tip.classList.add('hidden'); openDetail(el.dataset.id); } });
+
+let modalResolve = null;
+function openModal(title, body, buttons = []) {
+  $('#mTitle').textContent = title; $('#mBody').innerHTML = body;
+  const foot = $('#mFoot'); foot.innerHTML = '';
+  buttons.forEach(b => { const el = document.createElement('button'); el.textContent = b.label; if (b.cls) el.className = b.cls; el.onclick = b.fn; foot.appendChild(el); });
+  $('#modal').classList.remove('hidden');
+}
+function closeModal() { $('#modal').classList.add('hidden'); if (modalResolve) { const r = modalResolve; modalResolve = null; r(null); } }
+$('#mClose').onclick = closeModal;
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').classList.contains('hidden')) closeModal(); });
+$('#mBody').addEventListener('click', e => {
+  const a = e.target.closest('[data-open]'); if (a) return openDetail(a.dataset.open);
+  const t = e.target.closest('code.try'); if (t) { closeModal(); cmdEl.value = t.textContent; cmdEl.focus(); }
+});
+const link = (id, label) => `<a data-open="${esc(id)}">${esc(label)}</a>`;
+const pre = s => `<pre>${esc(s)}</pre>`;
+const act = (label, line, cls) => ({ label, cls, fn:() => { closeModal(); runCmd(line); } });
+
+function openDetail(id) {
+  if (CP[id]) return openModal(CP[id].label, `<p>${CP[id].desc}</p><h4>CURRENT STATE</h4>${cpState(id)}`, [{ label:'Refresh', fn:() => openDetail(id) }]);
+  const { k, o } = objFromId(id);
+  if (!o) return openModal('Gone', '<p>This object no longer exists.</p>');
+  const refresh = { label:'↻ Refresh', fn:() => openDetail(id) };
+  if (k === 'pod') {
+    const d = depOfPod(o), svcs = S.services.filter(s => matches(s.selector, o.labels));
+    const rel = [o.owner ? `ReplicaSet ${link('rs:' + o.owner, o.owner)}` : 'no owner (bare pod)', d ? `Deployment ${link('dep:' + d.name, d.name)}` : '', o.nodeName ? `Node ${link('node:' + o.nodeName, o.nodeName)}` : 'not scheduled', ...svcs.map(s => `Service ${link('svc:' + s.name, s.name)}`)].filter(Boolean);
+    return openModal(`Pod ${o.name}`, `<h4>RELATED</h4>${rel.join(' · ')}<h4>SPEC & STATUS</h4>${pre(yaml(podManifest(o)))}<h4>EVENTS</h4>${pre(eventsFor('pod/' + o.name))}`,
+      [refresh, act('kubectl describe', `kubectl describe pod ${o.name}`), act('kubectl logs', `kubectl logs ${o.name}`), act('Delete pod', `kubectl delete pod ${o.name}`, 'warn')]);
+  }
+  if (k === 'node' || k === 'kubelet' || k === 'rt' || k === 'proxy') {
+    const pods = S.pods.filter(p => p.nodeName === o.name);
+    let extra = '';
+    if (k === 'kubelet') extra = `<h4>KUBELET</h4><p>${NODE_DESC.kubelet}</p>${pre(`heartbeat: ${o.ready ? 'renewing Lease every 10s' : 'STOPPED'}\npods managed:\n${pods.map(p => `  ${p.name.padEnd(32)} ${podStatus(p)}`).join('\n') || '  (none)'}`)}`;
+    if (k === 'rt') extra = `<h4>CONTAINERD</h4><p>${NODE_DESC.rt}</p>${pre(table([['CONTAINER','IMAGE','STATE','POD'], ...pods.map(p => [p.state === 'Running' ? p.cid : '-', p.image, p.state === 'Running' ? 'Running' : p.state, p.name])]))}`;
+    if (k === 'proxy') extra = `<h4>KUBE-PROXY (iptables, simplified)</h4><p>${NODE_DESC.proxy}</p>${pre(S.services.map(s => {
+      const eps = s.endpoints.map(findPod).filter(Boolean), id8 = hashStr(s.name).slice(0, 8).toUpperCase();
+      return `-A KUBE-SERVICES -d ${s.clusterIP}/32 -p tcp --dport ${s.port} -j KUBE-SVC-${id8}\n` + (eps.length ? eps.map((p, i) =>
+        `-A KUBE-SVC-${id8} -m statistic --mode random --probability ${(1 / (eps.length - i)).toFixed(5)} -j KUBE-SEP-${hashStr(p.name).slice(0, 6).toUpperCase()}   # → ${p.ip}:${s.targetPort}`).join('\n')
+        : `-A KUBE-SERVICES -d ${s.clusterIP}/32 -j REJECT   # no endpoints`);
+    }).join('\n\n') || '# no services')}`;
+    return openModal(`Node ${o.name}${k !== 'node' ? ' · ' + { kubelet:'kubelet', rt:'containerd', proxy:'kube-proxy' }[k] : ''}`,
+      `${extra}<h4>PODS</h4>${pods.map(p => link('pod:' + p.name, p.name) + ` (${podStatus(p)})`).join('<br>') || '(none)'}<h4>NODE</h4>${pre(yaml(nodeManifest(o)))}<h4>EVENTS</h4>${pre(eventsFor('node/' + o.name))}`,
+      [refresh, act('kubectl describe', `kubectl describe node ${o.name}`),
+       o.unschedulable ? act('Uncordon', `kubectl uncordon ${o.name}`) : act('Cordon', `kubectl cordon ${o.name}`),
+       act('Drain', `kubectl drain ${o.name} --ignore-daemonsets --force`),
+       o.ready ? { label:'⚡ Power off', cls:'warn', fn:() => { closeModal(); enqueue(() => powerOff(o, false)); } } : { label:'🔌 Power on', fn:() => { closeModal(); enqueue(() => powerOn(o)); } }]);
+  }
+  if (k === 'svc') {
+    const eps = o.endpoints.map(findPod).filter(Boolean);
+    return openModal(`Service ${o.name}`, `<h4>ENDPOINTS (round-robin targets)</h4>${eps.map(p => link('pod:' + p.name, `${p.name} → ${p.ip}:${o.targetPort}`)).join('<br>') || '<i>none — no ready pods match the selector</i>'}<h4>SPEC</h4>${pre(yaml(svcManifest(o)))}<h4>EVENTS</h4>${pre(eventsFor('service/' + o.name))}`,
+      [refresh, act('Send 6 requests', `curl ${o.name} 6`, 'primary'), act('kubectl describe', `kubectl describe service ${o.name}`), act('Delete', `kubectl delete service ${o.name}`, 'warn')]);
+  }
+  if (k === 'dep') {
+    const rss = rsOfDep(o).sort((a, b) => b.revision - a.revision);
+    return openModal(`Deployment ${o.name}`, `<h4>REPLICASETS (revision history)</h4>${rss.map(r => link('rs:' + r.name, `rev ${r.revision}: ${r.name} — ${readyCount(r)}/${r.replicas} ready — ${r.template.image}`)).join('<br>')}<h4>SPEC & STATUS</h4>${pre(yaml(depManifest(o)))}<h4>EVENTS</h4>${pre(eventsFor('deployment/' + o.name))}`,
+      [refresh, act('Scale +1', `kubectl scale deployment ${o.name} --replicas=${o.replicas + 1}`), act('Scale −1', `kubectl scale deployment ${o.name} --replicas=${Math.max(0, o.replicas - 1)}`),
+       act('Rollout undo', `kubectl rollout undo deployment/${o.name}`), act('Delete', `kubectl delete deployment ${o.name}`, 'warn')]);
+  }
+  if (k === 'rs') {
+    const pods = podsOfRS(o);
+    return openModal(`ReplicaSet ${o.name}`, `<h4>RELATED</h4>Owner: Deployment ${link('dep:' + o.owner, o.owner)}<h4>PODS</h4>${pods.map(p => link('pod:' + p.name, `${p.name} (${podStatus(p)})`)).join('<br>') || '(none)'}<h4>SPEC</h4>${pre(yaml(rsManifest(o)))}<h4>EVENTS</h4>${pre(eventsFor('replicaset/' + o.name))}`, [refresh]);
+  }
+}
+function cpState(id) {
+  if (id === 'etcd') {
+    const keys = ['/registry/namespaces/default', ...S.nodes.map(n => '/registry/minions/' + n.name), ...S.deployments.map(d => '/registry/deployments/default/' + d.name),
+      ...S.replicasets.map(r => '/registry/replicasets/default/' + r.name), ...S.pods.map(p => '/registry/pods/default/' + p.name),
+      '/registry/services/specs/default/kubernetes', ...S.services.map(s => '/registry/services/specs/default/' + s.name)];
+    return pre(`$ etcdctl get / --prefix --keys-only\n${keys.join('\n')}\n(+ ${S.events.length} event keys, leases, endpointslices…)`);
+  }
+  if (id === 'api') return pre(`Objects: ${S.nodes.length} nodes, ${S.pods.length} pods, ${S.deployments.length} deployments, ${S.replicasets.length} replicasets, ${S.services.length + 1} services\nWatchers: kube-scheduler, kube-controller-manager, ${S.nodes.length} kubelets, ${S.nodes.length} kube-proxies\nAdmission: NamespaceLifecycle, LimitRanger, ServiceAccount, DefaultTolerationSeconds, ResourceQuota …`);
+  if (id === 'sched') return pre(`Pending pods:\n${pendingPods().map(p => `  ${p.name}: ${p.schedMsg || 'waiting'}`).join('\n') || '  (none)'}\n\nRecent bindings:\n${S.lastBindings.map(b => '  ' + b).join('\n') || '  (none)'}`);
+  if (id === 'cm') return pre(`Running control loops (subset):\n  deployment         ${S.deployments.length} deployments${S.deployments.some(d => d.rolling) ? ' (rollout in progress)' : ''}\n  replicaset         ${S.replicasets.length} replicasets\n  node-lifecycle     ${S.nodes.filter(n => !n.ready).length} node(s) without heartbeat\n  endpointslice      ${S.services.length} services\n  garbage-collector  cascading deletes via ownerReferences\n  taint-eviction     evicts pods from unreachable nodes`);
+  if (id === 'kubectl') return pre(S.history.slice(-15).join('\n') || '(no commands yet)');
+  if (id === 'client') return `<p>Send traffic: <code class="try">curl ${S.services[0] ? S.services[0].name : 'web'} 6</code></p>`;
+  return '';
+}
+
+function openYamlEditor() {
+  const T = {
+    Deployment:`apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: httpd:2.4
+          resources:
+            requests:
+              cpu: 300m
+              memory: 256Mi`,
+    Service:`apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  type: NodePort
+  selector:
+    app: api
+  ports:
+    - port: 80
+      targetPort: 80`,
+    Pod:`apiVersion: v1
+kind: Pod
+metadata:
+  name: debug
+  labels:
+    run: debug
+spec:
+  containers:
+    - name: debug
+      image: busybox:1.36`,
+  };
+  T['Deployment + Service'] = T.Deployment + '\n---\n' + T.Service;
+  return new Promise(res => {
+    openModal('kubectl apply -f -', `<p>Edit the manifest(s) and click <b>Apply</b>. Separate documents with <code>---</code>. Supported kinds: Deployment, Service, Pod.</p>
+      <p>Template: <select id="yTpl">${Object.keys(T).map(k => `<option>${k}</option>`).join('')}</select></p><textarea id="yText" spellcheck="false"></textarea>`,
+      [{ label:'Cancel', fn:closeModal }, { label:'Apply', cls:'primary', fn:() => { const v = $('#yText').value; modalResolve = null; $('#modal').classList.add('hidden'); res(v); } }]);
+    modalResolve = res;
+    const ta = $('#yText'), sel = $('#yTpl');
+    ta.value = T['Deployment + Service'];
+    sel.value = 'Deployment + Service';
+    sel.onchange = () => ta.value = T[sel.value];
+    ta.addEventListener('keydown', e => { if (e.key === 'Tab') { e.preventDefault(); const s = ta.selectionStart; ta.setRangeText('  ', s, ta.selectionEnd, 'end'); } });
+    ta.focus();
+  });
+}
+
+/* =====================================================================
+   10. GUIDED LESSONS
+   Each lesson: task (HTML), check() against live state, why (HTML).
+   ===================================================================== */
+const ready = name => { const d = findDep(name); return d && depStatus(d).ready === d.replicas && depStatus(d).total === d.replicas && !d.rolling; };
+const T = c => `<code class="try">${c}</code>`;
+const LESSONS = [
+  { title:'1 · Your first Pod',
+    task:`Create a single pod running nginx and wait until its LED turns green.<br>${T('kubectl run hello --image=nginx')}<br>Then try ${T('kubectl get pods -o wide')}.`,
+    check:() => findPod('hello')?.state === 'Running',
+    why:`Your command only <b>wrote a Pod object to etcd</b>. The <b>scheduler</b> noticed a pod with no node and bound it; the <b>kubelet</b> on that node noticed a pod bound to it and asked <b>containerd</b> to start it. Nobody "pushed" anything — every component <i>watches</i> the API server.` },
+  { title:'2 · Deployments & self-healing',
+    task:`Create a Deployment with 3 replicas, then delete one of its pods and watch it come back.<br>${T('kubectl create deployment web --image=nginx --replicas=3')}<br>${T('kubectl get pods')} then ${T('kubectl delete pod <one-of-the-web-pods>')} (Tab completes names).`,
+    check:() => S.stats.deletedFrom.has('web') && ready('web'),
+    why:`A Deployment creates a <b>ReplicaSet</b>, which keeps <i>exactly N</i> pods matching its template. When you deleted a pod, the ReplicaSet controller saw <b>actual (2) &lt; desired (3)</b> and created a replacement. That's <b>reconciliation</b>: desired state in etcd, controllers closing the gap forever.` },
+  { title:'3 · Scaling',
+    task:`Scale <b>web</b> to 5 replicas and watch the scheduler spread them by free resources.<br>${T('kubectl scale deployment web --replicas=5')}<br>Then try scaling to 30 and see what happens to pods that don't fit!`,
+    check:() => findDep('web')?.replicas >= 5 && ready('web'),
+    why:`Scaling only changes one number: <code>spec.replicas</code>. The Deployment controller passes it to the ReplicaSet, which creates pods; the scheduler <b>filters</b> nodes by free CPU/memory (based on <i>requests</i>, not real usage) and <b>scores</b> the rest. Pods that fit nowhere stay <b>Pending</b> with a <code>FailedScheduling</code> event.` },
+  { title:'4 · Services & load balancing',
+    task:`Expose <b>web</b> and send traffic. Watch requests rotate across pods.<br>${T('kubectl expose deployment web --port=80 --type=LoadBalancer')}<br>${T('curl web 6')}`,
+    check:() => findSvc('web') && (S.stats.curl.web?.size || 0) >= 2,
+    why:`A Service is a stable <b>virtual IP</b> plus a label selector. The <b>EndpointSlice controller</b> tracks which ready pods match, and <b>kube-proxy</b> on every node turns that into iptables rules. Pods come and go; the Service IP stays the same.` },
+  { title:'5 · Rolling updates & rollback',
+    task:`Change the image, watch old/new ReplicaSets swap pods one at a time (pod border colors = revision), then roll back.<br>${T('kubectl set image deployment/web nginx=nginx:1.25')}<br>${T('kubectl rollout status deployment/web')}<br>${T('kubectl rollout undo deployment/web')}`,
+    check:() => S.stats.undo > 0 && ready('web'),
+    why:`Changing the pod template creates a <b>new ReplicaSet</b>. The Deployment controller scales it up by 1 (<b>maxSurge</b>), waits for the new pod to be <b>Ready</b>, then scales the old one down (<b>maxUnavailable=0</b>) — zero downtime. Old ReplicaSets are kept at 0 replicas, so <b>undo</b> is just switching back to one.` },
+  { title:'6 · What happens when a node dies?',
+    task:`Click a worker node that has pods and press <b>⚡ Power off</b> (or use the <b>－</b> button next to <b>Nodes</b> in the header). Watch the node lifecycle controller react, then wait until all deployments are healthy again.<br>${T('kubectl get nodes')} ${T('kubectl get pods -o wide')}`,
+    check:() => S.stats.nodeFailed > 0 && S.deployments.length > 0 && S.deployments.every(d => ready(d.name)) && S.events.some(e => e.reason === 'TaintManagerEviction'),
+    why:`Nodes prove they're alive by renewing a <b>Lease</b>. With no heartbeat the <b>node lifecycle controller</b> marks the node NotReady and taints it; pods that don't tolerate the taint are <b>evicted</b>. Their ReplicaSets then recreate them on healthy nodes. Bare pods (no owner) are simply lost.` },
+  { title:'7 · Debugging ImagePullBackOff',
+    task:`Deploy an image with a typo, investigate, then fix it.<br>${T('kubectl create deployment broken --image=ngnix --replicas=2')}<br>${T('kubectl get pods')} ${T('kubectl describe pod <broken-pod>')} ${T('kubectl get events')}<br>Fix: ${T('kubectl set image deployment/broken ngnix=nginx')}`,
+    check:() => S.stats.sawBackoff.has('broken') && ready('broken'),
+    why:`The pod was scheduled fine, but <b>containerd couldn't pull</b> the image, so the kubelet reported <b>ErrImagePull → ImagePullBackOff</b>. <code>describe</code> and <code>events</code> show the exact registry error. Fixing the template triggered a new ReplicaSet; the controller removed the unready old pods first.` },
+  { title:'8 · Cordon & drain (maintenance)',
+    task:`Safely empty a node for maintenance, then bring it back.<br>${T('kubectl drain node-1 --ignore-daemonsets')} (add ${T('--force')} if it complains about bare pods)<br>${T('kubectl uncordon node-1')}`,
+    check:() => S.stats.drained > 0 && S.nodes.every(n => !n.unschedulable),
+    why:`<b>cordon</b> sets <code>spec.unschedulable</code> so the scheduler skips the node. <b>drain</b> = cordon + <b>evict</b> every pod via the Eviction API (respecting PodDisruptionBudgets), so ReplicaSets recreate them elsewhere. <b>uncordon</b> re-enables scheduling — but running pods don't move back by themselves.` },
+];
+let lessonIdx = -1, lessonDone = new Set();
+function showLesson(i) {
+  lessonIdx = i;
+  const L = LESSONS[i];
+  $('#lesson').classList.remove('hidden');
+  $('#lTitle').textContent = '📘 ' + L.title;
+  $('#lProg').textContent = `${i + 1}/${LESSONS.length}`;
+  $('#lTask').innerHTML = L.task;
+  $('#lWhy').classList.add('hidden');
+  $('#lPrev').disabled = i === 0; $('#lNext').disabled = i === LESSONS.length - 1;
+  checkLesson();
+}
+function checkLesson() {
+  if (lessonIdx < 0 || !S) return;
+  const L = LESSONS[lessonIdx];
+  let ok = false; try { ok = !!L.check(); } catch (e) { ok = false; }
+  if (ok && $('#lWhy').classList.contains('hidden')) {
+    $('#lWhy').innerHTML = `<b>✓ Done!</b> Why it worked: ${L.why}`;
+    $('#lWhy').classList.remove('hidden');
+    if (!lessonDone.has(lessonIdx)) { lessonDone.add(lessonIdx); print(`✓ Lesson complete: ${L.title}`, 'ok'); }
+  }
+}
+function openLessonMenu() {
+  openModal('Guided lessons', `<p>Short interactive tasks. Each one checks the live cluster and explains <i>why</i> it worked. Lessons 3–5 build on the <b>web</b> deployment from lesson 2.</p>` +
+    LESSONS.map((L, i) => `<div class="lessonItem" data-lesson="${i}">${lessonDone.has(i) ? '✅' : '⬜'} <b>${L.title}</b></div>`).join(''), [{ label:'Close', fn:closeModal }]);
+  document.querySelectorAll('[data-lesson]').forEach(el => el.onclick = () => { closeModal(); showLesson(+el.dataset.lesson); });
+}
+$('#lesson').addEventListener('click', e => { const t = e.target.closest('code.try'); if (t) { cmdEl.value = t.textContent.replace(/<.*?>/, ''); cmdEl.focus(); } });
+$('#lClose').onclick = () => { lessonIdx = -1; $('#lesson').classList.add('hidden'); };
+$('#lPrev').onclick = () => lessonIdx > 0 && showLesson(lessonIdx - 1);
+$('#lNext').onclick = () => lessonIdx < LESSONS.length - 1 && showLesson(lessonIdx + 1);
+
+/* =====================================================================
+   11. WIRING & BOOT
+   ===================================================================== */
+$('#bLessons').onclick = openLessonMenu;
+$('#bBreak').onclick = () => enqueue(breakIt);
+$('#bExplain').onclick = () => enqueue(replay);
+$('#bAdd').onclick = () => enqueue(addNode);
+$('#bRm').onclick = () => {
+  const n = [...S.nodes].reverse().find(x => !x.deleting);
+  if (!n) return print('No nodes to remove.', 'err');
+  enqueue(() => powerOff(n, true));
+};
+$('#bReset').onclick = () => { resetCluster(); print('— cluster reset —', 'info'); };
+document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => {
+  SPEED = +b.dataset.s;
+  document.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('on', x === b));
+});
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+  $('#explain').classList.toggle('hidden', b.dataset.tab !== 'explain');
+  $('#events').classList.toggle('hidden', b.dataset.tab !== 'events');
+  if (b.dataset.tab === 'events') renderEvents();
+});
+
+resetCluster();
+print('Welcome! This board is a live Kubernetes cluster with a real reconciliation loop.\nType "help", press Tab to autocomplete, or open 📘 Lessons.', 'info');
+cmdEl.focus();
+engineLoop();
+</script>
+</body>
+</html>
