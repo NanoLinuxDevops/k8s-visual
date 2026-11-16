@@ -253,6 +253,56 @@ code.try:active { transform:scale(0.98); }
 .muted { color:var(--dim); font-size:12.5px; margin:0 0 14px; }
 .muted a { color:var(--k8s3); }
 
+/* file explorer */
+#files { padding:0; display:flex; flex-direction:column; }
+#files.hidden { display:none; }
+.fx-bar { position:sticky; top:0; z-index:1; display:flex; align-items:center; gap:8px; padding:8px 10px 8px 14px; background:var(--s1); border-bottom:1px solid var(--hair); }
+.fx-bar button { height:26px; padding:0 9px; font-size:12px; }
+.fx-host { font:600 11px var(--mono); color:var(--k8s3); background:rgba(50,108,229,.14); border:1px solid rgba(91,141,239,.25); padding:2px 7px; border-radius:999px; white-space:nowrap; }
+.fx-cwd { font:500 11.5px var(--mono); color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.fx-tree { padding:6px; font:12.5px var(--mono); }
+.fx-row { position:relative; display:flex; align-items:center; gap:6px; height:28px; padding:0 6px 0 calc(6px + var(--d) * 16px); border-radius:var(--r-s); cursor:pointer; color:#c6cfe8;
+  transition:background-color var(--d-hover) ease; }
+.fx-row .chev { width:14px; display:grid; place-items:center; color:var(--mute); flex:none; }
+.fx-row .chev .ic { width:12px; height:12px; transition:transform var(--d-pop) var(--ease-out); }
+.fx-row.open .chev .ic { transform:rotate(90deg); }
+.fx-row > .ic { color:var(--mute); }
+.fx-row.dir > .ic { color:#7f9be0; }
+.fx-row.yaml > .ic { color:var(--k8s2); }
+.fx-row .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.fx-row.dir .nm { color:#e3e9fb; }
+.fx-row.here { background:rgba(50,108,229,.1); }
+.fx-row .tag { font:600 9.5px var(--ui); letter-spacing:.06em; text-transform:uppercase; color:var(--k8s3); background:rgba(50,108,229,.2); padding:1px 5px; border-radius:4px; }
+.fx-row .sz { margin-left:auto; color:var(--mute); font-size:11px; white-space:nowrap; }
+.fx-row .acts { display:flex; gap:3px; margin-left:8px; opacity:0; transition:opacity var(--d-hover) ease; }
+.fx-row .acts button { height:22px; padding:0 7px; font:500 11px var(--ui); box-shadow:none; }
+.fx-row .acts button.del { color:#ff9aa5; }
+.fx-row:focus-within .acts { opacity:1; }
+@media (hover: hover) and (pointer: fine) {
+  .fx-row:hover { background:rgba(255,255,255,.04); }
+  .fx-row:hover .acts { opacity:1; }
+}
+@media (hover: none) { .fx-row .acts { opacity:1; } }
+.fx-hint { padding:4px 16px 14px; margin:0; font-size:11.5px; }
+
+/* code editor (vi / apply -f -) */
+.ed-bar { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.ed-bar .muted { margin:0; flex:1; min-width:0; font-size:12px; }
+.ed-path { font-family:var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ed { display:flex; height:min(54vh, 480px); background:#04060d; border:1px solid var(--hair2); border-radius:var(--r-m); overflow:hidden;
+  transition:border-color var(--d-hover) ease, box-shadow var(--d-hover) ease; }
+.ed:focus-within { border-color:rgba(91,141,239,.6); box-shadow:0 0 0 3px rgba(91,141,239,.18); }
+.ed .gut { flex:none; min-width:46px; padding:12px 10px 40px 12px; text-align:right; color:#34405f; font:12px/1.6 var(--mono); white-space:pre; overflow:hidden; user-select:none;
+  background:rgba(255,255,255,.015); border-right:1px solid var(--hair); }
+#mBody .ed textarea { flex:1; height:auto; border:0; border-radius:0; background:transparent; box-shadow:none; resize:none; white-space:pre; overflow:auto; tab-size:2; line-height:1.6; }
+.ed-status { display:flex; justify-content:space-between; gap:12px; margin-top:8px; font:11px var(--mono); color:var(--mute); }
+.ed-status #edLint { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.ed-status .ok { color:var(--green); } .ed-status .bad { color:#ff8a96; }
+.fld { display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--dim); }
+.fld input { height:36px; background:#04060d; color:#fff; border:1px solid var(--hair2); border-radius:var(--r-s); padding:0 10px; font:13px var(--mono); outline:none;
+  transition:border-color var(--d-hover) ease, box-shadow var(--d-hover) ease; }
+.fld input:focus { border-color:rgba(91,141,239,.6); box-shadow:0 0 0 3px rgba(91,141,239,.18); }
+
 /* svg board — calmer PCB: hairline traces, glow reserved for live signals */
 #svg text { font-family:var(--ui); }
 .flow { fill:none; stroke:#7fa8ff; stroke-width:1.2; stroke-dasharray:2 16; opacity:.35; animation:flow 2.4s linear infinite; pointer-events:none; }
@@ -404,12 +454,13 @@ code.try:active { transform:scale(0.98); }
       <div class="lf"><button id="lPrev">‹ Prev</button><button id="lNext" class="primary">Next ›</button></div>
     </div>
     <section id="panel" class="card">
-      <div class="card-head"><div id="tabs"><button data-tab="explain" class="on">What just happened</button><button data-tab="events">Events</button><button data-tab="docs">Cheatsheet</button></div></div>
+      <div class="card-head"><div id="tabs"><button data-tab="explain" class="on">What just happened</button><button data-tab="events">Events</button><button data-tab="files">Files</button><button data-tab="docs">Cheatsheet</button></div></div>
       <div id="explain" class="pane">
         <div id="explainTitle">Type a command below — try <b>help</b>, or open 🎓 CKA Academy.</div>
         <ol id="steps"></ol>
       </div>
       <div id="events" class="pane hidden"></div>
+      <div id="files" class="pane hidden"></div>
       <div id="docs" class="pane hidden"></div>
     </section>
     <section id="term" class="card">
@@ -505,7 +556,8 @@ function freshState() {
     ],
     clusterrolebindings: [{ kind:'ClusterRoleBinding', name:'cluster-admin', roleRef:{ kind:'ClusterRole', name:'cluster-admin' }, subjects:[{ kind:'Group', name:'system:masters' }], created:now(), system:true }],
     storageclasses: [{ kind:'StorageClass', name:'standard', provisioner:'rancher.io/local-path', isDefault:true, reclaimPolicy:'Delete', created:now() }],
-    ctxNs:'default', cpVersion:K8S_VERSION, cpKubeadm:K8S_VERSION, etcdDataDir:'/var/lib/etcd', restored:{}, fs:{}, env:{}, snaps:{}, etcdDirs:{}, shell:null,
+    ctxNs:'default', cpVersion:K8S_VERSION, cpKubeadm:K8S_VERSION, etcdDataDir:'/var/lib/etcd', restored:{}, fs:{}, dirs:{}, mtime:{}, cwd:{}, oldPwd:{},
+    env:{ do:'--dry-run=client -o yaml', now:'--force --grace-period=0' }, snaps:{}, etcdDirs:{}, shell:null,
     nodeSeq: 0, lastBindings: [], history: [],
     stats: { deletedFrom: new Set(), curl: {}, undo: 0, nodeFailed: 0, sawBackoff: new Set(), drained: 0, canI: 0, dryRun: 0, jsonpath: 0,
              npBlocked: 0, sawConfigErr: 0, kubeletFixed: 0, setCtx: 0, restored: 0 },
@@ -723,8 +775,58 @@ function markDelete(p) {
 async function reconcile() {
   // Every controller gets a turn each pass (like independent goroutines in the real controller-manager).
   let did = false;
-  for (const c of [deploymentController, replicaSetController, garbageCollector, pvController, scheduler, kubelets, nodeController, endpointsController])
+  for (const c of [deploymentController, replicaSetController, garbageCollector, pvController, staticPodController, scheduler, kubelets, nodeController, endpointsController])
     if (await c()) did = true;
+  return did;
+}
+// --- Static pods: each kubelet runs Pod manifests found in its staticPodPath, no scheduler involved ---
+const STATIC_DIR = '/etc/kubernetes/manifests/';
+function staticManifests(n) {
+  const want = {}, fs = S.fs[n.name] || {};
+  for (const [path, text] of Object.entries(fs)) {
+    if (!path.startsWith(STATIC_DIR) || path.slice(STATIC_DIR.length).includes('/') || !/\.(ya?ml|json)$/.test(path)) continue;
+    const sig = hashStr(text);
+    try {
+      const doc = parseYAMLDocs(text)[0];
+      if (!doc || doc.kind !== 'Pod') throw new Error(`only kind: Pod can be a static pod (got ${doc ? doc.kind : 'an empty file'})`);
+      const md = doc.metadata || {};
+      if (!md.name) throw new Error('metadata.name: Required value');
+      const ns = String(md.namespace || 'default'), name = `${md.name}-${n.name}`;
+      want[`${ns}/${name}`] = { ns, name, labels:md.labels || {}, spec:parsePodSpec(doc.spec || {}, `static Pod "${md.name}"`), sig, path };
+    } catch (e) { want['!' + path] = { error:e.message, sig, path }; }
+  }
+  return want;
+}
+async function staticPodController() {
+  let did = false;
+  for (const n of S.nodes) {
+    if (!n.ready || !S.fs[n.name]) continue;
+    const want = staticManifests(n), KL = 'kubelet:' + n.name;
+    n.staticErrs = n.staticErrs || {};
+    for (const [k, w] of Object.entries(want)) {
+      if (!k.startsWith('!') || n.staticErrs[w.path] === w.sig) continue;
+      n.staticErrs[w.path] = w.sig;
+      await step(`⚠️ <b>kubelet@${n.name}</b> can't load static pod manifest <code>${esc(w.path)}</code>: <i>${esc(w.error)}</i> It skips the file (on a real node you'd see this in <code>journalctl -u kubelet</code>).`, [[KL, 'rt:' + n.name, C.del]]);
+      did = true;
+    }
+    const stale = S.pods.filter(p => p.static === n.name && live(p) && want[`${p.ns}/${p.name}`]?.sig !== p.staticSig);
+    if (stale.length) {
+      await step(`<b>kubelet@${n.name}</b> sees the manifest of ${stale.map(p => `<b>${p.name}</b>`).join(', ')} changed or removed in <code>${STATIC_DIR}</code> → stops the static pod and deletes its mirror pod.`,
+        [[KL, 'rt:' + n.name, C.del], [KL, 'api', C.del]], () => stale.forEach(markDelete));
+      did = true;
+    }
+    const missing = Object.entries(want).filter(([k]) => !k.startsWith('!') && !S.pods.some(p => `${p.ns}/${p.name}` === k)).map(([, w]) => w);
+    if (missing.length) {
+      await step(`📄 <b>kubelet@${n.name}</b> watches <code>${STATIC_DIR}</code> and finds ${missing.map(w => `<code>${esc(baseName(w.path))}</code>`).join(', ')} → runs it <b>directly</b> (no scheduler, no controller) and posts a read-only <b>mirror pod</b> ${missing.map(w => `<b>${w.name}</b>`).join(', ')} so kubectl can see it.`,
+        [[KL, 'rt:' + n.name, C.req], [KL, 'api', C.write], ['api', 'etcd', C.write]], () => missing.forEach(w => {
+          if (S.pods.some(p => p.ns === w.ns && p.name === w.name) || !S.nodes.includes(n)) return;
+          const p = makePod({ name:w.name, ns:w.ns, labels:w.labels, image:w.spec.image, container:w.spec.container, cpu:w.spec.cpu, mem:w.spec.mem, extra:w.spec.extra });
+          Object.assign(p, { nodeName:n.name, static:n.name, staticSig:w.sig, staticPath:w.path });
+          S.pods.push(p);
+        }));
+      did = true;
+    }
+  }
   return did;
 }
 async function engineLoop() {
@@ -1396,7 +1498,7 @@ function podManifest(p) {
   const n = p.nodeName && findNode(p.nodeName);
   return { apiVersion:'v1', kind:'Pod',
     metadata:{ name:p.name, namespace:p.ns, uid:p.uid, labels:p.labels, creationTimestamp:iso(p.created), deletionTimestamp:p.terminating ? iso(p.delAt) : undefined,
-      ownerReferences:p.owner ? [{ apiVersion:'apps/v1', kind:'ReplicaSet', name:p.owner, controller:true, blockOwnerDeletion:true }] : undefined },
+      ownerReferences:p.owner ? [{ apiVersion:'apps/v1', kind:'ReplicaSet', name:p.owner, controller:true, blockOwnerDeletion:true }] : p.static ? [{ apiVersion:'v1', kind:'Node', name:p.static, controller:true }] : undefined },
     spec:{ nodeName:p.nodeName || undefined, restartPolicy:'Always', serviceAccountName:'default', ...podSpecManifest(p, p.container, p.image) },
     status:{ phase:p.state === 'Running' ? 'Running' : 'Pending', hostIP:n ? n.ip : undefined, podIP:p.ip || undefined,
       conditions:[{ type:'PodScheduled', status:p.nodeName ? 'True' : 'False', reason:p.nodeName ? undefined : 'Unschedulable', message:p.schedMsg || undefined },
@@ -1484,7 +1586,7 @@ Labels:           ${lbl.join('\n                  ') || '<none>'}
 Annotations:      <none>
 Status:           ${p.terminating ? 'Terminating' : p.state === 'Running' ? 'Running' : 'Pending'}
 IP:               ${p.ip || ''}
-Controlled By:    ${p.owner ? 'ReplicaSet/' + p.owner : '<none>'}
+Controlled By:    ${p.owner ? 'ReplicaSet/' + p.owner : p.static ? 'Node/' + p.static : '<none>'}
 Containers:
   ${p.container}:
     Container ID:   ${p.state === 'Running' ? 'containerd://' + p.cid + '…' : ''}
@@ -1690,7 +1792,13 @@ function tokenize(line) {
     else if (ch === '|') { flush(); out.push({ op:'|' }); }
     else if (ch === ';') { flush(); out.push(';'); }
     else if (ch === '&' && line[i + 1] === '&') { flush(); out.push('&&'); i++; }
-    else if (ch === '>') { flush(); if (line[i + 1] === '>') { i++; out.push({ op:'>>' }); } else out.push({ op:'>' }); }
+    else if (ch === '>') {
+      const two = cur === '2' && !has;
+      if (two) cur = '';
+      flush();
+      if (line[i + 1] === '>') { i++; out.push({ op:two ? '2>' : '>>' }); } else out.push({ op:two ? '2>' : '>' });
+    }
+    else if (ch === '<' && line[i + 1] !== '<' && line[i - 1] !== '<') { flush(); out.push({ op:'<' }); }
     else cur += ch;
   }
   flush();
@@ -1713,8 +1821,8 @@ function parseArgs(tokens) {
     } else if (/^-[a-zA-Z]{2,}$/.test(t)) {
       flags[t.slice(1)] = true;
     } else if (/^-[a-zA-Z]$/.test(t)) {
-      const k = { o:'output', f:'filename', n:'namespace', r:'replicas', l:'selector', h:'help', A:'all-namespaces', w:'watch', i:'stdin', t:'tty', c:'container' }[t[1]] || t[1];
-      flags[k] = ['h','A','w','i','t'].includes(t[1]) ? true : (tokens[i + 1] !== undefined && !(tokens[i + 1].startsWith('-') && tokens[i + 1].length > 1) ? tokens[++i] : true);
+      const k = { o:'output', f:'filename', n:'namespace', r:'replicas', l:'selector', h:'help', A:'all-namespaces', w:'watch', i:'stdin', t:'tty', c:'container', R:'recursive' }[t[1]] || t[1];
+      flags[k] = ['h','A','w','i','t','R'].includes(t[1]) ? true : (tokens[i + 1] !== undefined && !(tokens[i + 1].startsWith('-') && tokens[i + 1].length > 1) ? tokens[++i] : true);
     } else args.push(t);
   }
   return { args, flags };
@@ -2085,6 +2193,7 @@ const CMDS = {
           if (now0) removePods([p], true); else markDelete(p);
         }, `pod "${name}" ${now0 ? 'force deleted' : 'deleted'}`, now0 ? `<b>Force delete</b>: the object is removed from etcd immediately, without waiting for the kubelet to confirm the containers stopped.` : `API server sets <code>deletionTimestamp</code> → pod is <b>Terminating</b>. The kubelet on its node will do the actual killing.`);
         if (p.owner) await step(`🩹 <b>Self-healing ahead:</b> ${name} is owned by ReplicaSet ${p.owner}. Its controller will see actual &lt; desired and create a replacement.`);
+        if (p.static) await step(`📄 ${name} is a <b>mirror pod</b> of a static pod on ${p.static}. The kubelet will simply re-create it — to really remove a static pod, delete <code>${esc(p.staticPath)}</code> on that node.`);
       } else if (kind === 'deployment') {
         const d = findDep(name);
         if (!d) { await apiErr(notFound('deployment', name), 'not found'); continue; }
@@ -2130,7 +2239,7 @@ const CMDS = {
     if (!n) return apiErr(notFound('node', args[0]), 'not found');
     if (!n.unschedulable) await writePath(`PATCH node/${n.name} spec.unschedulable=true`, () => n.unschedulable = true, `node/${n.name} cordoned`, `Step 1 of drain = <b>cordon</b>: the scheduler will no longer place pods here.`);
     else print(`node/${n.name} already cordoned`);
-    const pods = S.pods.filter(p => p.nodeName === n.name && live(p));
+    const pods = S.pods.filter(p => p.nodeName === n.name && live(p) && !p.static);
     const bare = pods.filter(p => !p.owner);
     if (bare.length && !flags.force) {
       await step(`❌ Drain refuses to evict <b>bare pods</b> (${bare.map(p => p.name).join(', ')}): nothing would recreate them. Use <code>--force</code> to accept losing them.`);
@@ -2532,10 +2641,25 @@ async function applyFiles(flags, mode) {
   const f = flags.filename;
   let text;
   if (f === true || f === '-') {
-    text = await openYamlEditor(null, `kubectl ${mode === 'replace-force' ? 'replace --force' : mode} -f -`, mode === 'delete' ? 'Delete' : 'Apply');
-    if (text == null) return print(`${mode} cancelled`, 'info');
+    if (STDIN != null) text = STDIN;
+    else {
+      text = await openYamlEditor(null, `kubectl ${mode === 'replace-force' ? 'replace --force' : mode} -f -`, mode === 'delete' ? 'Delete' : 'Apply');
+      if (text == null) return print(`${mode} cancelled`, 'info');
+    }
   } else {
-    text = fsOf()[resolvePath(f)];
+    const p = resolvePath(f);
+    if (isDir(p)) {
+      const files = Object.keys(fsOf()).filter(x => x.startsWith(joinPath(p, '')) && /\.(ya?ml|json)$/.test(x) && (flags.recursive || !x.slice(joinPath(p, '').length).includes('/'))).sort();
+      if (!files.length) return err(`error: no objects passed to ${mode} (no .yaml/.yml/.json files in ${f}${flags.recursive ? '' : ' — add -R to recurse'})`);
+      S.stats.dirApply = (S.stats.dirApply || 0) + 1;
+      for (const x of files) {
+        let docs;
+        try { docs = parseYAMLDocs(fsOf()[x]); } catch (e) { err(`error: error parsing ${x}: error converting YAML to JSON: ${e.message}`); continue; }
+        for (const doc of docs) await applyDoc(doc, mode);
+      }
+      return;
+    }
+    text = fsOf()[p];
     if (text === undefined) return err(`error: the path "${f}" does not exist\nHint: create it first, e.g. kubectl run x --image=nginx --dry-run=client -o yaml > ${f}  (or vi ${f})`);
   }
   let docs;
@@ -2761,7 +2885,9 @@ const HELP = `KubeCircuit CKA lab — the "kubectl"/"k" prefix is optional for k
  Nodes (ssh)      ssh controlplane | ssh node-1 · systemctl status|start|stop|restart kubelet · journalctl -u kubelet · crictl ps · exit
  Cluster ops      (on controlplane) etcdctl snapshot save|status|restore ... · kubeadm upgrade plan|apply vX · kubeadm token create --print-join-command
                   (on nodes) apt-get install -y kubeadm=1.31.0-1.1 kubelet=1.31.0-1.1 · kubeadm upgrade node · systemctl restart kubelet
- Shell            pipes: | grep [-i|-v] X · | head|tail -n N · | wc -l · | base64 -d   redirects: > file  >> file   export do="--dry-run=client -o yaml"
+ Files            ls -la · cd DIR · pwd · tree · mkdir -p · touch · cp -r · mv · rm -r · cat -n · head/tail -n N · grep -rn PAT DIR · sed -i 's/a/b/g' F · diff A B · find . -name '*.yaml'
+                  vi FILE (Ctrl+S saves) · kubectl apply -f DIR/ [-R] · paste heredocs: cat <<EOF > f.yaml … EOF · Files tab = graphical explorer
+ Shell            pipes: | grep [-i|-v|-n] X · | head|tail -n N · | wc -l · | base64 -d · | kubectl apply -f -   redirects: > f  >> f  < f  2>/dev/null
                   help · clear · ↑/↓ history · Tab completion
 
 Tips: images with typos like "ngnix" fail to pull. Click any chip/pod/node for a detail card. Open 🎓 CKA for the curriculum & a timed mock exam.`;
@@ -2770,12 +2896,117 @@ Tips: images with typos like "ngnix" fail to pull. Click any chip/pod/node for a
    7b. SHELL, HOSTS & NODE-LEVEL TOOLS (ssh, systemctl, kubeadm, etcdctl, files)
    ===================================================================== */
 const HOST = () => S.shell || 'workstation';
-const promptStr = () => S.shell ? `root@${S.shell}:~# ` : 'student@cka-lab:~$ ';
+const HOME = (host = HOST()) => host === 'workstation' ? '/home/student' : '/root';
+const cwd = (host = HOST()) => S.cwd[host] || HOME(host);
+const tildify = (p, host = HOST()) => p === HOME(host) ? '~' : p.startsWith(HOME(host) + '/') ? '~' + p.slice(HOME(host).length) : p;
+const promptStr = () => S.shell ? `root@${S.shell}:${tildify(cwd())}# ` : `student@cka-lab:${tildify(cwd())}$ `;
+function normPath(p, base = '/') {
+  if (p === '~' || p.startsWith('~/')) p = HOME() + p.slice(1);
+  const out = [];
+  for (const s of (p.startsWith('/') ? p : base + '/' + p).split('/')) { if (s === '..') out.pop(); else if (s && s !== '.') out.push(s); }
+  return '/' + out.join('/');
+}
+const resolvePath = p => !p ? p : normPath(String(p), cwd());
+const parentOf = p => p.slice(0, p.lastIndexOf('/')) || '/';
+const baseName = p => p.slice(p.lastIndexOf('/') + 1);
+const joinPath = (dir, name) => dir === '/' ? '/' + name : dir + '/' + name;
 function fsOf(host = HOST()) {
-  if (!S.fs[host]) S.fs[host] = host === 'controlplane' ? cpFiles() : host === 'workstation' ? {} : nodeFiles(host);
+  if (!S.fs[host]) S.fs[host] = { ...commonFiles(host), ...(host === 'controlplane' ? cpFiles() : host === 'workstation' ? studentFiles() : nodeFiles(host)) };
   return S.fs[host];
 }
-const resolvePath = p => !p ? p : p.startsWith('/') ? p : (S.shell ? '/root/' : '/home/student/') + p.replace(/^\.\//, '');
+/** Explicit directories per host (files also imply their parent dirs). */
+function dirsOf(host = HOST()) {
+  if (!S.dirs[host]) {
+    S.dirs[host] = {};
+    for (const d of ['/tmp', '/opt', '/etc', '/var/log', '/usr/bin', HOME(host), ...(host === 'workstation' ? [] : ['/etc/kubernetes/manifests'])]) mkdirP(d, host);
+    for (const f of Object.keys(fsOf(host))) mkdirP(parentOf(f), host);
+  }
+  return S.dirs[host];
+}
+function mkdirP(p, host = HOST()) {
+  const d = dirsOf(host); let cur = '';
+  d['/'] = d['/'] || S.t0;
+  for (const s of p.split('/').filter(Boolean)) { cur += '/' + s; if (!d[cur]) d[cur] = now(); }
+}
+function isDir(p, host = HOST()) {
+  if (dirsOf(host)[p]) return true;
+  const pre = p === '/' ? '/' : p + '/';
+  return Object.keys(fsOf(host)).some(f => f.startsWith(pre)) || (host === 'controlplane' && Object.keys(S.etcdDirs).some(d => d === p || d.startsWith(pre)));
+}
+const isFile = (p, host = HOST()) => fsOf(host)[p] !== undefined;
+const pathExists = (p, host = HOST()) => isFile(p, host) || isDir(p, host);
+const mtimeOf = (p, host = HOST()) => S.mtime[host + ':' + p] || dirsOf(host)[p] || S.t0;
+function listDir(dir, host = HOST()) {
+  const pre = dir === '/' ? '/' : dir + '/', kids = new Map();
+  const add = (path, isD) => {
+    if (!path.startsWith(pre) || path === dir) return;
+    const rest = path.slice(pre.length), name = rest.split('/')[0];
+    if (name && (!kids.has(name) || isD || rest.includes('/'))) kids.set(name, { name, path:pre + name, dir:isD || rest.includes('/') });
+  };
+  Object.keys(fsOf(host)).forEach(f => add(f, false));
+  Object.keys(dirsOf(host)).forEach(d => add(d, true));
+  if (host === 'controlplane') Object.keys(S.etcdDirs).forEach(d => add(d, true));
+  return [...kids.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+function writeFile(p, text, host = HOST()) { mkdirP(parentOf(p), host); fsOf(host)[p] = text; S.mtime[host + ':' + p] = now(); }
+function removePath(p, host = HOST()) {
+  const pre = p + '/', hit = x => x === p || x.startsWith(pre), fs = fsOf(host), d = dirsOf(host);
+  Object.keys(fs).filter(hit).forEach(f => delete fs[f]);
+  Object.keys(d).filter(hit).forEach(x => delete d[x]);
+  if (host === 'controlplane') { Object.keys(S.etcdDirs).filter(hit).forEach(x => delete S.etcdDirs[x]); Object.keys(S.snaps).filter(hit).forEach(x => delete S.snaps[x]); }
+}
+function copyPath(src, dst, host = HOST()) {
+  mkdirP(isDir(src, host) ? dst : parentOf(dst), host);
+  for (const [p, t] of Object.entries(fsOf(host))) if (p === src || p.startsWith(src + '/')) writeFile(dst + p.slice(src.length), t, host);
+  for (const d of Object.keys(dirsOf(host))) if (d.startsWith(src + '/')) mkdirP(dst + d.slice(src.length), host);
+  if (S.snaps[src]) S.snaps[dst] = S.snaps[src];
+}
+const globRe = (pat, ci) => new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$', ci ? 'i' : '');
+/** Bash-style glob expansion of the last path segment; unmatched patterns stay literal. */
+function globExpand(tok) {
+  if (typeof tok !== 'string' || !/[*?]/.test(tok)) return [tok];
+  const slash = tok.lastIndexOf('/'), dirPart = tok.slice(0, slash + 1), pat = tok.slice(slash + 1), dir = resolvePath(dirPart || '.');
+  if (!isDir(dir)) return [tok];
+  const re = globRe(pat), hits = listDir(dir).filter(k => re.test(k.name) && (pat.startsWith('.') || !k.name.startsWith('.'))).map(k => dirPart + k.name);
+  return hits.length ? hits : [tok];
+}
+const fmtSize = n => n < 1024 ? n + ' B' : (n / 1024).toFixed(1) + ' KB';
+const lsDate = t => { const d = new Date(t); return `${d.toLocaleString('en-US', { month:'short' })} ${String(d.getDate()).padStart(2)} ${d.toTimeString().slice(0, 5)}`; };
+/** Minimal getopt for classic Unix tools: -abc bundles, -n 5 / -n5 values, -5 shorthand. */
+function unixArgs(argv, valued = []) {
+  const f = new Set(), o = {}, args = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--') { args.push(...argv.slice(i + 1)); break; }
+    if (/^-\d+$/.test(a)) o.n = a.slice(1);
+    else if (/^--[a-z]/.test(a)) { const [k, v] = a.slice(2).split('='); f.add(k); if (v !== undefined) o[k] = v; }
+    else if (/^-[A-Za-z]/.test(a)) {
+      for (let j = 1; j < a.length; j++) { const c = a[j]; if (valued.includes(c)) { o[c] = a.slice(j + 1) || argv[++i]; break; } f.add(c); }
+    } else args.push(a);
+  }
+  return { f, o, args };
+}
+function readText(a, cmd) {
+  const p = resolvePath(a);
+  if (isDir(p)) { err(`${cmd}: ${a}: Is a directory`); return null; }
+  const t = fsOf()[p];
+  if (t === undefined) { err(`${cmd}: ${a}: No such file or directory`); return null; }
+  return t;
+}
+function commonFiles(host) {
+  const name = host === 'workstation' ? 'cka-lab' : host;
+  return { '/etc/hostname':name + '\n', '/etc/os-release':'PRETTY_NAME="Ubuntu 22.04.4 LTS"\nNAME="Ubuntu"\nVERSION_ID="22.04"\nVERSION="22.04.4 LTS (Jammy Jellyfish)"\nID=ubuntu\n',
+    '/etc/hosts':`127.0.0.1 localhost\n192.168.49.2 controlplane\n${S.nodes.map(n => `${n.ip} ${n.name}`).join('\n')}\n` };
+}
+function studentFiles() {
+  const files = {
+    '/home/student/.bashrc':'# ~/.bashrc — exam-style shell setup\nalias k=kubectl\nexport do="--dry-run=client -o yaml"\nexport now="--force --grace-period=0"\nsource <(kubectl completion bash)\ncomplete -o default -F __start_kubectl k\n',
+    '/home/student/.vimrc':'set expandtab\nset tabstop=2\nset shiftwidth=2\n',
+    '/home/student/README.md':`# Welcome to the CKA lab workstation\n\nThis is a virtual Linux filesystem. Everything you write here persists until you reset the cluster.\n\n  ls -la · cd examples · cat deployment-service.yaml · tree\n  mkdir -p ~/cka && cp examples/*.yaml ~/cka/\n  vi ~/cka/deployment-service.yaml       (Ctrl+S saves)\n  kubectl apply -f ~/cka/                (a whole directory)\n  sed -i 's/replicas: 3/replicas: 5/' ~/cka/deployment-service.yaml\n  diff examples/deployment-service.yaml ~/cka/deployment-service.yaml\n  kubectl get deploy api -o yaml > api.yaml\n\nPaste multi-line heredocs straight into the terminal:\n\n  cat <<EOF > pod.yaml\n  apiVersion: v1\n  ...\n  EOF\n\nThe Files tab is a graphical explorer for the same disk.\n`,
+  };
+  for (const [k, v] of Object.entries(YAML_TEMPLATES)) files[`/home/student/examples/${k.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.yaml`] = v + '\n';
+  return files;
+}
 function etcdManifest(dir) {
   return `apiVersion: v1
 kind: Pod
@@ -2855,11 +3086,11 @@ const SHELL = {
   async ssh(args) {
     const host = (args[0] || '').replace(/^.*@/, '');
     if (S.shell) return err(`(you are already on ${S.shell} — type "exit" first)`);
-    if (host === 'controlplane' || host === 'master') { S.shell = 'controlplane'; return print('Welcome to Ubuntu 22.04.4 LTS (GNU/Linux 5.15.0-105-generic x86_64)\n\nYou are on the control plane node. kubectl, kubeadm and etcdctl are available here.', 'info'); }
+    if (host === 'controlplane' || host === 'master') { S.shell = 'controlplane'; S.cwd.controlplane = '/root'; return print('Welcome to Ubuntu 22.04.4 LTS (GNU/Linux 5.15.0-105-generic x86_64)\n\nYou are on the control plane node. kubectl, kubeadm and etcdctl are available here.', 'info'); }
     const n = findNode(host);
     if (!n) return err(`ssh: Could not resolve hostname ${host}: Name or service not known`);
     if (!n.power) return err(`ssh: connect to host ${host} port 22: No route to host`);
-    S.shell = host;
+    S.shell = host; S.cwd[host] = '/root';
     print(`Welcome to Ubuntu 22.04.4 LTS (GNU/Linux 5.15.0-105-generic x86_64)\n\nYou are on worker ${host}. There is no kubeconfig here — use systemctl, journalctl, crictl, kubeadm, apt-get.`, 'info');
   },
   async exit() { if (!S.shell) return print('(already on the student workstation)', 'info'); print(`logout\nConnection to ${S.shell} closed.`); S.shell = null; },
@@ -2972,43 +3203,274 @@ const SHELL = {
   async 'apt-mark'(args) { return print(args.slice(1).map(p => `${p} set ${args[0] === 'hold' ? 'on' : 'to not on'} hold.`).join('\n') || 'apt-mark: hold|unhold PKG'); },
   async etcdctl(args, all, flags) { return etcdTool(args, flags, 'etcdctl'); },
   async etcdutl(args, all, flags) { return etcdTool(args, flags, 'etcdutl'); },
-  async ls(args) {
-    const dir = resolvePath(args.find(a => !a.startsWith('-')) || '.').replace(/\/\.$/, '').replace(/\/$/, '') || '/';
-    const files = Object.keys(fsOf()), base = dir === '/home/student/.' || dir === '/root/.' ? dir.slice(0, -2) : dir;
-    const kids = [...new Set(files.filter(f => f.startsWith(base + '/')).map(f => f.slice(base.length + 1).split('/')[0]))];
-    const extra = Object.keys(S.etcdDirs || {}).filter(d => d.startsWith(base + '/') && HOST() === 'controlplane').map(d => d.slice(base.length + 1).split('/')[0]);
-    print([...new Set([...kids, ...extra])].sort().join('  ') || '');
+  async ls(argv) {
+    const { f, args } = unixArgs(argv), long = f.has('l'), all = f.has('a') || f.has('A'), targets = args.length ? args : ['.'];
+    const fmt = rows => long
+      ? [`total ${rows.length * 4}`, ...rows.map(r => {
+          const sz = r.dir ? 4096 : (fsOf()[r.path] || '').length, who = S.shell ? 'root root' : 'student student';
+          return `${r.dir ? 'drwxr-xr-x' : r.path.includes('/pki/') || /\.key$/.test(r.path) ? '-rw-------' : '-rw-r--r--'} ${r.dir ? 2 : 1} ${who} ${String(f.has('h') ? fmtSize(sz).replace(' ', '') : sz).padStart(6)} ${lsDate(mtimeOf(r.path))} ${r.name}`;
+        })].join('\n')
+      : rows.map(r => r.name + (r.dir ? '/' : '')).join('  ');
+    const blocks = [], files = [], dirs = [];
+    for (const t of targets) {
+      const p = resolvePath(t);
+      if (isFile(p)) files.push({ name:t, path:p, dir:false });
+      else if (isDir(p)) dirs.push([t, p]);
+      else err(`ls: cannot access '${t}': No such file or directory`);
+    }
+    if (files.length) blocks.push(fmt(files));
+    for (const [t, p] of dirs) {
+      let rows = listDir(p);
+      if (!all) rows = rows.filter(r => !r.name.startsWith('.'));
+      else if (f.has('a')) rows = [{ name:'.', path:p, dir:true }, { name:'..', path:parentOf(p), dir:true }, ...rows];
+      const body = fmt(rows);
+      blocks.push(targets.length > 1 ? `${t}:\n${body}` : body);
+    }
+    const out = blocks.filter(Boolean).join('\n\n');
+    if (out) print(out);
   },
-  async cat(args) {
-    const p = args.find(a => !a.startsWith('-'));
-    if (!p) return err('cat: missing operand');
-    const f = fsOf()[resolvePath(p)];
-    if (f === undefined) return err(`cat: ${p}: No such file or directory`);
-    print(f);
+  async cd(argv) {
+    const a = argv[0], t = a === '-' ? (S.oldPwd[HOST()] || cwd()) : resolvePath(a || '~');
+    if (!isDir(t)) return err(`bash: cd: ${a}: ${isFile(t) ? 'Not a directory' : 'No such file or directory'}`);
+    S.oldPwd[HOST()] = cwd(); S.cwd[HOST()] = t;
+    if (a === '-') print(t);
   },
-  async vi(args) { return editFile(args[0]); },
-  async vim(args) { return editFile(args[0]); },
-  async nano(args) { return editFile(args[0]); },
-  async rm(args) { const p = args.find(a => !a.startsWith('-')); if (p) delete fsOf()[resolvePath(p)]; },
-  async echo(args) { print(args.join(' ')); },
+  async pwd() { print(cwd()); },
+  async mkdir(argv) {
+    const { f, args } = unixArgs(argv);
+    if (!args.length) return err('mkdir: missing operand');
+    for (const a of args) {
+      const p = resolvePath(a);
+      if (pathExists(p)) { if (!f.has('p')) err(`mkdir: cannot create directory '${a}': File exists`); continue; }
+      if (!f.has('p') && !isDir(parentOf(p))) { err(`mkdir: cannot create directory '${a}': No such file or directory`); continue; }
+      mkdirP(p);
+    }
+  },
+  async rmdir(argv) {
+    for (const a of unixArgs(argv).args) {
+      const p = resolvePath(a);
+      if (!isDir(p)) err(`rmdir: failed to remove '${a}': ${isFile(p) ? 'Not a directory' : 'No such file or directory'}`);
+      else if (listDir(p).length) err(`rmdir: failed to remove '${a}': Directory not empty`);
+      else removePath(p);
+    }
+  },
+  async touch(argv) {
+    const { args } = unixArgs(argv);
+    if (!args.length) return err('touch: missing file operand');
+    for (const a of args) {
+      const p = resolvePath(a);
+      if (isDir(p)) { dirsOf()[p] = now(); continue; }
+      if (!isDir(parentOf(p))) { err(`touch: cannot touch '${a}': No such file or directory`); continue; }
+      writeFile(p, fsOf()[p] ?? '');
+    }
+  },
+  async cat(argv) {
+    const { f, args } = unixArgs(argv);
+    if (!args.length) return STDIN != null ? print(STDIN.replace(/\n$/, '')) : err('cat: missing operand (or pipe / heredoc something into it)');
+    const parts = args.map(a => readText(a, 'cat')).filter(t => t != null);
+    if (!parts.length) return;
+    let text = parts.map(t => t.replace(/\n$/, '')).join('\n');
+    if (f.has('n')) text = text.split('\n').map((l, i) => String(i + 1).padStart(6) + '  ' + l).join('\n');
+    print(text);
+  },
+  async less(argv) { return SHELL.cat(argv); },
+  async more(argv) { return SHELL.cat(argv); },
+  async head(argv) { return fileFilter('head', argv, ['n']); },
+  async tail(argv) { return fileFilter('tail', argv, ['n']); },
+  async wc(argv) { return fileFilter('wc', argv, []); },
+  async sort(argv) { return fileFilter('sort', argv, []); },
+  async grep(argv) {
+    const { f, o, args } = unixArgs(argv, ['e', 'A', 'B', 'C']);
+    const pat = o.e ?? args.shift();
+    if (pat == null) return err('Usage: grep [OPTION]... PATTERNS [FILE]...');
+    let files = args;
+    if (!files.length) {
+      if (STDIN == null) return err('grep: no input files (pipe something in, or pass a file)');
+      const hits = grepLines(STDIN.replace(/\n$/, '').split('\n'), pat, f);
+      return print(f.has('c') ? String(hits.length) : hits.join('\n'));
+    }
+    if (f.has('r') || f.has('R')) files = files.flatMap(a => { const p = resolvePath(a); return isDir(p) ? Object.keys(fsOf()).filter(x => x.startsWith(p === '/' ? '/' : p + '/')).sort().map(x => a.replace(/\/$/, '') + x.slice(p.length)) : [a]; });
+    const many = files.length > 1 || f.has('r') || f.has('R'), out = [];
+    for (const a of files) {
+      const t = readText(a, 'grep'); if (t == null) continue;
+      const hits = grepLines(t.replace(/\n$/, '').split('\n'), pat, f);
+      if (f.has('l')) { if (hits.length) out.push(a); continue; }
+      if (f.has('c')) { out.push(many ? `${a}:${hits.length}` : String(hits.length)); continue; }
+      out.push(...hits.map(l => many ? `${a}:${l}` : l));
+    }
+    if (out.length) print(out.join('\n'));
+  },
+  async egrep(argv) { return SHELL.grep(argv); },
+  async sed(argv) {
+    const { f, o, args } = unixArgs(argv, ['e']);
+    const expr = o.e ?? args.shift(), m = expr && expr.match(/^s(.)(.*?)\1(.*?)\1([gi]*)$/);
+    if (!m) return err(`sed: -e expression #1, char 1: unknown command: \`${(expr || '')[0] || ''}'\nHint: supported here: sed [-i] 's/old/new/[g]' FILE`);
+    let re;
+    try { re = new RegExp(m[2], (m[4].includes('g') ? 'g' : '') + (m[4].includes('i') ? 'i' : '')); } catch (e) { return err('sed: ' + e.message); }
+    const rep = m[3].replace(/\$/g, '$$$$').replace(/\\(\d)/g, '$$$1').replace(/(^|[^\\])&/g, '$1$$&').replace(/\\&/g, '&');
+    const run = t => t.split('\n').map(l => l.replace(re, rep)).join('\n');
+    if (!args.length) return STDIN != null ? print(run(STDIN).replace(/\n$/, '')) : err('sed: no input files');
+    for (const a of args) {
+      const t = readText(a, 'sed'); if (t == null) continue;
+      if (f.has('i')) writeFile(resolvePath(a), run(t)); else print(run(t).replace(/\n$/, ''));
+    }
+  },
+  async diff(argv) {
+    const { args } = unixArgs(argv);
+    if (args.length !== 2) return err(`diff: ${args.length < 2 ? 'missing operand after \'' + (args[0] || 'diff') + '\'' : 'extra operand'}`);
+    const [a, b] = args.map(x => readText(x, 'diff'));
+    if (a == null || b == null) return;
+    const out = diffLines(a.replace(/\n$/, '').split('\n'), b.replace(/\n$/, '').split('\n'));
+    if (out.length) print(out.join('\n'));
+  },
+  async tree(argv) {
+    const { f, args } = unixArgs(argv), t = args[0] || '.', root = resolvePath(t);
+    if (!isDir(root)) return err(`${t}  [error opening dir]`);
+    let nd = 0, nf = 0;
+    const lines = [t];
+    const walk = (dir, pfx) => {
+      const kids = listDir(dir).filter(k => f.has('a') || !k.name.startsWith('.'));
+      kids.forEach((k, i) => {
+        const last = i === kids.length - 1;
+        lines.push(pfx + (last ? '└── ' : '├── ') + k.name);
+        if (k.dir) { nd++; walk(k.path, pfx + (last ? '    ' : '│   ')); } else nf++;
+      });
+    };
+    walk(root, '');
+    print([...lines, '', `${nd} director${nd === 1 ? 'y' : 'ies'}, ${nf} file${nf === 1 ? '' : 's'}`].join('\n'));
+  },
+  async find(argv) {
+    let i = 0, name = null, type = null;
+    const start = argv[0] && !argv[0].startsWith('-') ? argv[i++] : '.';
+    for (; i < argv.length; i++) {
+      if (argv[i] === '-name' || argv[i] === '-iname') { name = globRe(argv[i + 1] || '*', argv[i] === '-iname'); i++; }
+      else if (argv[i] === '-type') type = argv[++i];
+    }
+    const root = resolvePath(start);
+    if (!pathExists(root)) return err(`find: '${start}': No such file or directory`);
+    const disp = p => p === root ? start : start.replace(/\/$/, '') + p.slice(root === '/' ? 0 : root.length), out = [];
+    const visit = (p, d) => {
+      if ((!type || (type === 'd') === d) && (!name || name.test(baseName(p) || '/'))) out.push(disp(p));
+      if (d) listDir(p).forEach(k => visit(k.path, k.dir));
+    };
+    visit(root, isDir(root));
+    if (out.length) print(out.join('\n'));
+  },
+  async cp(argv) {
+    const { f, args } = unixArgs(argv);
+    if (args.length < 2) return err(`cp: missing destination file operand after '${args[0] || ''}'`);
+    const dstRaw = args.pop(), dst = resolvePath(dstRaw);
+    if (args.length > 1 && !isDir(dst)) return err(`cp: target '${dstRaw}' is not a directory`);
+    for (const a of args) {
+      const src = resolvePath(a), target = isDir(dst) ? joinPath(dst, baseName(src)) : dst;
+      if (!pathExists(src)) { err(`cp: cannot stat '${a}': No such file or directory`); continue; }
+      if (isDir(src) && !(f.has('r') || f.has('R') || f.has('a'))) { err(`cp: -r not specified; omitting directory '${a}'`); continue; }
+      if (target === src || target.startsWith(src + '/')) { err(`cp: cannot copy '${a}' into itself`); continue; }
+      if (!isDir(parentOf(target))) { err(`cp: cannot create regular file '${dstRaw}': No such file or directory`); continue; }
+      copyPath(src, target);
+    }
+  },
+  async mv(argv) {
+    const { args } = unixArgs(argv);
+    if (args.length < 2) return err(`mv: missing destination file operand after '${args[0] || ''}'`);
+    const dstRaw = args.pop(), dst = resolvePath(dstRaw);
+    if (args.length > 1 && !isDir(dst)) return err(`mv: target '${dstRaw}' is not a directory`);
+    for (const a of args) {
+      const src = resolvePath(a), target = isDir(dst) ? joinPath(dst, baseName(src)) : dst;
+      if (!pathExists(src)) { err(`mv: cannot stat '${a}': No such file or directory`); continue; }
+      if (target === src || target.startsWith(src + '/')) { err(`mv: cannot move '${a}' to a subdirectory of itself`); continue; }
+      if (!isDir(parentOf(target))) { err(`mv: cannot move '${a}' to '${dstRaw}': No such file or directory`); continue; }
+      copyPath(src, target); removePath(src);
+    }
+  },
+  async rm(argv) {
+    const { f, args } = unixArgs(argv), rec = f.has('r') || f.has('R');
+    if (!args.length) return err('rm: missing operand');
+    for (const a of args) {
+      const p = resolvePath(a);
+      if (isDir(p)) {
+        if (!rec) { err(`rm: cannot remove '${a}': Is a directory`); continue; }
+        if (p === '/' || p === HOME()) { err(`rm: refusing to remove '${a}'`); continue; }
+        removePath(p);
+      } else if (isFile(p)) removePath(p);
+      else if (!f.has('f')) err(`rm: cannot remove '${a}': No such file or directory`);
+    }
+  },
+  async tee(argv) {
+    const { f, args } = unixArgs(argv), text = STDIN ?? '';
+    for (const a of args) { const p = resolvePath(a); if (!isDir(parentOf(p))) { err(`tee: ${a}: No such file or directory`); continue; } writeFile(p, f.has('a') && fsOf()[p] ? fsOf()[p] + text : text); }
+    if (text) print(text.replace(/\n$/, ''));
+  },
+  async chmod(argv) { for (const a of unixArgs(argv).args.slice(1)) if (!pathExists(resolvePath(a))) err(`chmod: cannot access '${a}': No such file or directory`); },
+  async history() { print(S.history.map((h, i) => `${String(i + 1).padStart(5)}  ${h}`).join('\n')); },
+  async which(argv) { const out = argv.filter(c => SHELL[c] || c === 'kubectl' || CMDS[c]).map(c => '/usr/bin/' + c); if (out.length) print(out.join('\n')); },
+  async vi(args) { return editFile(args.find(a => !a.startsWith('-') && !a.startsWith('+'))); },
+  async vim(args) { return SHELL.vi(args); },
+  async nano(args) { return SHELL.vi(args); },
+  async echo(args) { const n = args[0] === '-n', e = args[0] === '-e'; const s = args.slice(n || e ? 1 : 0).join(' '); print(e ? s.replace(/\\n/g, '\n').replace(/\\t/g, '\t') : s); },
   async export(args) { const m = (args.join(' ')).match(/^([A-Za-z_]\w*)=(.*)$/); if (!m) return err('export: usage: export NAME=value'); S.env[m[1]] = m[2]; },
   async alias() {},
   async source() {},
   async whoami() { print(S.shell ? 'root' : 'student'); },
   async hostname() { print(S.shell || 'cka-lab'); },
-  async pwd() { print(S.shell ? '/root' : '/home/student'); },
   async curl(args) { return curlCmd(args.filter(a => !a.startsWith('-'))); },
   async base64(args) { print('(use with a pipe, e.g.  … | base64 -d)', 'info'); },
 };
 async function editFile(p) {
   if (!p) return err('vi: missing file name');
-  const path = resolvePath(p), fs = fsOf(), cur = fs[path];
-  const text = await openYamlEditor(cur ?? '', `vi ${path}  @${HOST()}`, 'Save :wq', true);
-  if (text == null) return print(`"${p}" — quit without saving`, 'info');
-  fs[path] = text.endsWith('\n') ? text : text + '\n';
-  print(`"${p}" ${text.split('\n').length}L, ${text.length}B written`);
-  if (HOST() === 'controlplane' && path === '/etc/kubernetes/manifests/etcd.yaml') await onEtcdManifestSaved(text);
-  if (HOST() !== 'controlplane' && HOST() !== 'workstation' && path === '/var/lib/kubelet/config.yaml') print('Hint: the kubelet reads its config at start — run: systemctl restart kubelet', 'hint');
+  const path = resolvePath(p), host = HOST(), fs = fsOf(), cur = fs[path];
+  if (isDir(path)) return err(`"${p}" is a directory`);
+  if (!isDir(parentOf(path))) return err(`"${p}" E212: Can't open file for writing (directory ${parentOf(path)} does not exist — mkdir -p it first)`);
+  const r = await openFileEditor(path, cur ?? '', host);
+  if (!r) return print(`"${p}" — quit without saving`, 'info');
+  const text = r.text === '' || r.text.endsWith('\n') ? r.text : r.text + '\n';
+  writeFile(path, text);
+  print(`"${p}"${cur === undefined ? ' [New]' : ''} ${text.split('\n').length - 1}L, ${text.length}B written`);
+  if (host === 'controlplane' && path === '/etc/kubernetes/manifests/etcd.yaml') await onEtcdManifestSaved(text);
+  if (host !== 'controlplane' && host !== 'workstation' && path === '/var/lib/kubelet/config.yaml') print('Hint: the kubelet reads its config at start — run: systemctl restart kubelet', 'hint');
+  if (host !== 'controlplane' && host !== 'workstation' && path.startsWith(STATIC_DIR)) print(`Hint: the kubelet on ${host} watches ${STATIC_DIR} — a Pod manifest here becomes a static pod "<name>-${host}" within seconds.`, 'hint');
+  if (r.apply) await execLine(`kubectl apply -f ${path}`);
+}
+/** head/tail/wc/sort over files (or stdin) using the same logic as the pipe filters. */
+function fileFilter(cmd, argv, valued) {
+  const { f, o, args } = unixArgs(argv, valued);
+  const seg = [cmd, ...(o.n ? ['-n', o.n] : []), ...[...f].map(x => '-' + x)];
+  if (!args.length) {
+    if (STDIN == null) return err(`${cmd}: missing file operand`);
+    return print(pipeFilter(STDIN.replace(/\n$/, '').split('\n'), seg).join('\n'));
+  }
+  const outs = [];
+  for (const a of args) {
+    const t = readText(a, cmd); if (t == null) continue;
+    const res = pipeFilter(t.replace(/\n$/, '').split('\n'), seg);
+    outs.push(cmd === 'wc' ? `${res[0]} ${a}` : (args.length > 1 ? `==> ${a} <==\n` : '') + res.join('\n'));
+  }
+  if (outs.length) print(outs.join(cmd === 'wc' ? '\n' : '\n\n'));
+}
+function grepLines(lines, pat, f) {
+  let re;
+  try { re = new RegExp(f.has('w') ? `\\b(?:${pat})\\b` : pat, f.has('i') ? 'i' : ''); } catch { re = { test:s => s.includes(pat) }; }
+  const out = [];
+  lines.forEach((l, i) => { if (re.test(l) !== f.has('v')) out.push(f.has('n') ? `${i + 1}:${l}` : l); });
+  return out;
+}
+/** Classic `diff` normal format from an LCS table. */
+function diffLines(a, b) {
+  const n = a.length, m = b.length, L = Array.from({ length:n + 1 }, () => new Int32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const out = [], r = (s, e) => e - s === 1 ? `${s + 1}` : `${s + 1},${e}`;
+  let i = 0, j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) { i++; j++; continue; }
+    const i0 = i, j0 = j;
+    while ((i < n || j < m) && !(i < n && j < m && a[i] === b[j])) { if (j >= m || (i < n && L[i + 1][j] >= L[i][j + 1])) i++; else j++; }
+    const del = a.slice(i0, i), add = b.slice(j0, j);
+    out.push(del.length && add.length ? `${r(i0, i)}c${r(j0, j)}` : del.length ? `${r(i0, i)}d${j0}` : `${i0}a${r(j0, j)}`);
+    del.forEach(l => out.push('< ' + l));
+    if (del.length && add.length) out.push('---');
+    add.forEach(l => out.push('> ' + l));
+  }
+  return out;
 }
 /** The kubelet watches /etc/kubernetes/manifests: editing etcd.yaml restarts etcd with the new data dir. */
 async function onEtcdManifestSaved(text) {
@@ -3053,6 +3515,7 @@ async function etcdTool(args, flags, tool) {
     const dir = typeof flags['data-dir'] === 'string' ? flags['data-dir'] : 'default.etcd';
     if (dir === S.etcdDataDir) return err(`Error: data-dir "${dir}" exists`);
     (S.etcdDirs = S.etcdDirs || {})[dir] = clone(s);
+    mkdirP(resolvePath(dir));
     beginTrace(`${tool} snapshot restore → ${dir}`);
     await step(`Snapshot unpacked into a <b>new data directory</b> <code>${esc(dir)}</code>. Nothing changed in the running cluster yet! Next: edit <code>/etc/kubernetes/manifests/etcd.yaml</code> so the <b>etcd-data hostPath</b> points to ${esc(dir)}.`);
     return print(`${new Date().toISOString()}\tinfo\tsnapshot/v3_snapshot.go:265\trestoring snapshot\t{"path": "${path}", "wal-dir": "${dir}/member/wal", "data-dir": "${dir}"}\n${new Date().toISOString()}\tinfo\tsnapshot/v3_snapshot.go:293\trestored snapshot\t{"path": "${path}", "data-dir": "${dir}"}`, 'ok');
@@ -3067,51 +3530,93 @@ async function etcdTool(args, flags, tool) {
 function pipeFilter(lines, seg) {
   const [c, ...a] = seg, nArg = () => { const i = a.indexOf('-n'); return i >= 0 ? +a[i + 1] : /^-\d+$/.test(a[0] || '') ? -a[0] : 10; };
   if (c === 'grep' || c === 'egrep') {
-    const flags = a.filter(x => x.startsWith('-')).join(''), pat = a.find(x => !x.startsWith('-')) || '';
-    let re; try { re = new RegExp(pat, flags.includes('i') ? 'i' : ''); } catch { re = { test:s => s.includes(pat) }; }
-    return lines.filter(l => re.test(l) !== flags.includes('v'));
+    const { f, o, args } = unixArgs(a, ['e', 'A', 'B', 'C']);
+    const hits = grepLines(lines, o.e ?? args[0] ?? '', f);
+    return f.has('c') ? [String(hits.length)] : hits;
   }
   if (c === 'head') return lines.slice(0, nArg());
   if (c === 'tail') return lines.slice(-nArg());
-  if (c === 'wc') return [String(a.includes('-l') ? lines.length : lines.join(' ').split(/\s+/).filter(Boolean).length)];
+  if (c === 'wc') return [String(a.includes('-l') ? lines.length : a.includes('-c') ? lines.join('\n').length + 1 : lines.join(' ').split(/\s+/).filter(Boolean).length)];
   if (c === 'base64') { const s = lines.join('\n').trim(); try { return [a.some(x => /^-(d|-decode)$/.test(x)) ? unb64(s) : b64(s)]; } catch { return ['base64: invalid input']; } }
-  if (c === 'sort') return [...lines].sort();
+  if (c === 'sort') { const s = [...lines].sort(); return a.includes('-r') ? s.reverse() : s; }
+  if (c === 'uniq') return lines.filter((l, i) => l !== lines[i - 1]);
   if (c === 'awk' && /\{print \$(\d+)\}/.test(a.join(' '))) { const k = +a.join(' ').match(/\$(\d+)/)[1]; return lines.map(l => l.trim().split(/\s+/)[k - 1] || ''); }
-  return [...lines, `(${c}: not supported in this shell — supported filters: grep, head, tail, wc -l, sort, base64 -d, awk '{print $N}')`];
+  return [...lines, `(${c}: not supported in this shell — supported filters: grep, head, tail, wc -l, sort, uniq, base64 -d, awk '{print $N}')`];
 }
 
-async function exec(line) {
-  print(promptStr() + line, 'in');
-  S.history.push(line);
+const PIPE_FILTERS = ['grep', 'egrep', 'head', 'tail', 'wc', 'base64', 'sort', 'uniq', 'awk'];
+// Text fed to the current command by a pipe, heredoc or "< file" (cat, grep, sed, tee, kubectl apply -f -).
+let STDIN = null;
+/** Runs one input; multi-line input (pastes) runs line by line, and "<<EOF … EOF" heredocs become stdin. */
+async function exec(input) {
+  const lines = String(input).replace(/\r/g, '').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    const hd = line.match(/<<-?\s*(['"]?)([A-Za-z_]\w*)\1/);
+    if (!hd) { await execLine(line); continue; }
+    const body = [];
+    while (++i < lines.length && lines[i].trim() !== hd[2]) body.push(lines[i]);
+    await execLine(line.replace(hd[0], ' '), [line, ...body.map(l => '> ' + l), '> ' + hd[2]].join('\n'), body.join('\n') + '\n');
+  }
+}
+async function execLine(line, shown = line, stdin = null) {
+  print(promptStr() + shown, 'in');
+  S.history.push(line.trim());
   const expanded = line.replace(/\$\{?([A-Za-z_]\w*)\}?/g, (m, k) => S.env[k] ?? '');
   // "a && b" and "a ; b" run sequentially.
   const cmds = [[]];
-  for (const t of tokenize(expanded)) { if (t === '&&' || t === ';') cmds.push([]); else cmds[cmds.length - 1].push(t); }
-  for (const c of cmds) if (c.length) await execPipeline(c);
+  for (let t of tokenize(expanded)) {
+    if (typeof t === 'string' && /^~(\/|$)/.test(t)) t = HOME() + t.slice(1);
+    if (t === '&&' || t === ';') cmds.push([]); else cmds[cmds.length - 1].push(t);
+  }
+  for (const [i, c] of cmds.entries()) {
+    if (!c.length) continue;
+    STDIN = i === 0 ? stdin : null;
+    try { await execPipeline(c); } finally { STDIN = null; }
+  }
+}
+async function captureRun(seg, quiet, merge) {
+  const prev = CAPTURE; CAPTURE = [];
+  let got;
+  try { await runSimple(seg); } finally { got = CAPTURE; CAPTURE = prev; }
+  if (merge) return got;
+  if (!quiet) got.filter(c => c.cls === 'err').forEach(c => print(c.text, 'err'));
+  return got.filter(c => c.cls !== 'err');
 }
 async function execPipeline(toks) {
-  // Split into pipeline segments and an optional output redirect.
-  const segs = [[]]; let redirect = null;
+  // Split into pipeline segments plus optional redirects: > file, >> file, 2>/dev/null, 2>&1, < file.
+  const segs = [[]]; let redirect = null, quiet = false, merge = false;
   for (let i = 0; i < toks.length; i++) {
     const t = toks[i];
     if (t && t.op === '|') segs.push([]);
     else if (t && (t.op === '>' || t.op === '>>')) { redirect = { path:toks[i + 1], append:t.op === '>>' }; i++; }
+    else if (t && t.op === '2>') { if (toks[i + 1] === '&1') merge = true; else quiet = true; i++; }
+    else if (t && t.op === '<') {
+      const src = toks[++i];
+      if (typeof src !== 'string') return err('bash: syntax error near unexpected token `newline\'');
+      const txt = readText(src, 'bash'); if (txt == null) return;
+      STDIN = txt;
+    }
     else segs[segs.length - 1].push(t);
   }
   if (redirect && typeof redirect.path !== 'string') return err('bash: syntax error near unexpected token `newline\'');
-  if (segs.length === 1 && !redirect) return runSimple(segs[0]);
-  CAPTURE = [];
-  let captured;
-  try { await runSimple(segs[0]); } finally { captured = CAPTURE; CAPTURE = null; }
-  const errs = captured.filter(c => c.cls === 'err'), outs = captured.filter(c => c.cls !== 'err');
-  errs.forEach(c => print(c.text, 'err'));
-  let lines = outs.flatMap(c => c.text.split('\n'));
-  for (const seg of segs.slice(1)) lines = pipeFilter(lines, seg);
+  if (segs.length === 1 && !redirect && !quiet && !merge) return runSimple(segs[0]);
+  let items = await captureRun(segs[0], quiet, merge);
+  for (const seg of segs.slice(1)) {
+    const lines = items.flatMap(c => c.text.split('\n'));
+    if (PIPE_FILTERS.includes(seg[0])) items = pipeFilter(lines, seg).map(text => ({ text, cls:'' }));
+    else { STDIN = lines.join('\n') + '\n'; items = await captureRun(seg, quiet, merge); }
+  }
   if (redirect) {
-    const fs = fsOf(), p = resolvePath(redirect.path), text = lines.join('\n') + '\n';
-    fs[p] = redirect.append && fs[p] ? fs[p] + text : text;
+    if (redirect.path === '/dev/null') return;
+    const p = resolvePath(redirect.path);
+    if (isDir(p)) return err(`bash: ${redirect.path}: Is a directory`);
+    if (!isDir(parentOf(p))) return err(`bash: ${redirect.path}: No such file or directory`);
+    const body = items.length ? items.map(c => c.text).join('\n') + '\n' : '';
+    writeFile(p, redirect.append && fsOf()[p] ? fsOf()[p] + body : body);
     if (trace) addStepLi(`📝 Output written to <code>${esc(redirect.path)}</code> on ${HOST()} — edit it with <code>vi ${esc(redirect.path)}</code>, then <code>kubectl apply -f ${esc(redirect.path)}</code>.`, '');
-  } else print(lines.join('\n'));
+  } else items.forEach(c => print(c.text, c.cls));
 }
 
 async function runSimple(toks) {
@@ -3125,8 +3630,9 @@ async function runSimple(toks) {
   if (SHELL[t0] && !CMDS[t0]) {
     const { args, flags } = parseArgs(toks.slice(1));
     if (['ssh','systemctl','kubeadm','etcdctl','etcdutl','curl','apt-get','apt'].includes(t0)) beginTrace('$ ' + toks.join(' '));
-    // Only tools with kubectl-style --flags get parsed args; classic Unix tools get raw argv.
-    return SHELL[t0](['kubeadm','etcdctl','etcdutl','ssh'].includes(t0) ? args : toks.slice(1), toks, flags);
+    // Only tools with kubectl-style --flags get parsed args; classic Unix tools get raw argv (with globs expanded).
+    const raw = ['find', 'sed', 'grep', 'egrep', 'echo', 'export'].includes(t0) ? toks.slice(1) : toks.slice(1).flatMap(globExpand);
+    return SHELL[t0](['kubeadm','etcdctl','etcdutl','ssh'].includes(t0) ? args : raw, toks, flags);
   }
   let rest = toks;
   if (/^(kubectl|k)$/.test(t0)) rest = toks.slice(1);
@@ -3168,10 +3674,11 @@ let chain = Promise.resolve(), queued = 0;
 function enqueue(fn) {
   queued++; $('#busy').textContent = '⏳ running…';
   chain = chain.then(fn).catch(e => { if (e.message !== 'reset') { console.error(e); print('internal error: ' + e.message, 'err'); } })
-    .finally(() => { if (--queued === 0) $('#busy').textContent = ''; updatePrompt(); checkLesson(); });
+    .finally(() => { if (--queued === 0) $('#busy').textContent = ''; updatePrompt(); checkLesson(); renderFiles(); });
 }
 function updatePrompt() {
-  $('#promptLbl').textContent = S.shell ? `root@${S.shell}#` : '❯';
+  const where = tildify(cwd());
+  $('#promptLbl').textContent = S.shell ? `root@${S.shell}:${where}#` : `${where} ❯`;
   $('#hostLabel').textContent = S.shell ? `root@${S.shell}` : 'student@cka-lab';
   $('#inRow').classList.toggle('remote', !!S.shell);
 }
@@ -3184,6 +3691,21 @@ cmdEl.addEventListener('keydown', e => {
   else if (e.key === 'ArrowDown') { hi = Math.min(hist.length, hi + 1); cmdEl.value = hist[hi] || ''; e.preventDefault(); }
   else if (e.key === 'Tab') { e.preventDefault(); tabComplete(); }
 });
+// Multi-line pastes (heredocs, several commands) run as a script.
+cmdEl.addEventListener('paste', e => {
+  const t = (e.clipboardData || window.clipboardData).getData('text');
+  if (!/\n/.test(t.replace(/\n+$/, ''))) return;
+  e.preventDefault();
+  const full = (cmdEl.value + t).replace(/\s+$/, '');
+  cmdEl.value = ''; hist.push(full.split('\n')[0]); hi = hist.length;
+  runCmd(full);
+});
+const FILE_CMDS = ['vi','vim','nano','cat','rm','cp','mv','ls','cd','mkdir','touch','head','tail','grep','less','more','tree','find','sed','diff','tee','wc','rmdir','sort','chmod'];
+function pathCompletions(cur, dirsOnly) {
+  const slash = cur.lastIndexOf('/'), dirPart = cur.slice(0, slash + 1), dir = resolvePath(dirPart || '.');
+  if (!isDir(dir)) return [];
+  return listDir(dir).filter(k => (!dirsOnly || k.dir) && (!k.name.startsWith('.') || cur.slice(slash + 1).startsWith('.'))).map(k => dirPart + k.name + (k.dir ? '/' : ''));
+}
 function completions(prev, cur) {
   const verbs = Object.keys(CMDS);
   if (cur.startsWith('--namespace=')) return S.namespaces.map(n => '--namespace=' + n.name);
@@ -3193,7 +3715,7 @@ function completions(prev, cur) {
   const last = prev[prev.length - 1];
   if (last === '-n' || last === '--namespace') return S.namespaces.map(n => n.name);
   if (last === '-o') return ['wide','yaml','json','name','jsonpath=','custom-columns='];
-  if (last === '-f' || ['vi','vim','nano','cat','rm'].includes(prev[0])) return Object.keys(fsOf()).map(p => p.replace(/^\/home\/student\/|^\/root\//, ''));
+  if (last === '-f' || last === '--filename' || FILE_CMDS.includes(prev[0])) return pathCompletions(cur, ['cd', 'mkdir', 'rmdir', 'tree'].includes(prev[0]));
   if (prev[0] === 'ssh') return prev.length === 1 ? ['controlplane', ...S.nodes.map(n => n.name)] : [];
   if (prev[0] === 'systemctl') return prev.length === 1 ? ['status','start','stop','restart','enable','daemon-reload'] : ['kubelet','containerd'];
   if (prev[0] === 'journalctl') return ['-u','kubelet'];
@@ -3405,7 +3927,7 @@ $('#mClose').onclick = closeModal;
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && modalOpen()) closeModal(); });
 $('#mBody').addEventListener('click', e => {
-  const a = e.target.closest('[data-open]'); if (a) return openDetail(a.dataset.open);
+  const a = e.target.closest('a[data-open]'); if (a) return openDetail(a.dataset.open);
   const t = e.target.closest('code.try'); if (t) { closeModal(); cmdEl.value = t.textContent; cmdEl.focus(); }
 });
 const link = (id, label) => `<a data-open="${esc(id)}">${esc(label)}</a>`;
@@ -3520,6 +4042,21 @@ spec:
   ports:
     - port: 80
       targetPort: 80`,
+  'Static Pod':`apiVersion: v1
+kind: Pod
+metadata:
+  name: static-web
+  namespace: default
+  labels:
+    role: static-web
+spec:
+  containers:
+    - name: web
+      image: nginx:1.27
+      resources:
+        requests:
+          cpu: 100m
+          memory: 64Mi`,
   'Pod (nodeSelector + toleration)':`apiVersion: v1
 kind: Pod
 metadata:
@@ -3667,21 +4204,82 @@ metadata:
 provisioner: rancher.io/local-path
 reclaimPolicy: Retain`,
 };
-/** Modal YAML editor (used by apply -f -, kubectl edit and vi). Resolves with the text, or null on cancel. */
+/** Code editor body: line-number gutter, YAML auto-indent, live YAML validation. */
+const editorHTML = () => `<div class="ed"><div class="gut" aria-hidden="true"></div><textarea id="yText" spellcheck="false" wrap="off" autocapitalize="off"></textarea></div><div class="ed-status"><span id="edLint"></span><span id="edPos"></span></div>`;
+function wireEditor(ta, yaml = true) {
+  const gut = ta.previousElementSibling, lint = $('#edLint'), pos = $('#edPos');
+  let tm = 0, lines = 0;
+  const sync = () => { const n = ta.value.split('\n').length; if (n !== lines) { lines = n; gut.textContent = Array.from({ length:n }, (_, i) => i + 1).join('\n'); } gut.scrollTop = ta.scrollTop; };
+  const caret = () => { const b = ta.value.slice(0, ta.selectionStart).split('\n'); pos.textContent = `Ln ${b.length}, Col ${b[b.length - 1].length + 1} · Ctrl+S save · Tab indents`; };
+  const check = () => {
+    if (!yaml) { lint.className = ''; lint.textContent = 'plain text'; return; }
+    try {
+      const docs = parseYAMLDocs(ta.value).filter(Boolean);
+      lint.className = 'ok'; lint.textContent = docs.length ? `✓ valid YAML · ${docs.map(d => d.kind ? `${d.kind}${d.metadata && d.metadata.name ? '/' + d.metadata.name : ''}` : 'data').join(', ')}` : 'empty document';
+    } catch (e) { lint.className = 'bad'; lint.textContent = '✕ ' + e.message; }
+  };
+  const changed = () => { sync(); caret(); clearTimeout(tm); tm = setTimeout(check, 180); };
+  ta.addEventListener('input', changed);
+  ta.addEventListener('scroll', () => { gut.scrollTop = ta.scrollTop; });
+  ta.addEventListener('keyup', caret); ta.addEventListener('click', caret);
+  ta.addEventListener('keydown', e => {
+    const s = ta.selectionStart, ls = ta.value.lastIndexOf('\n', s - 1) + 1;
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      if (e.shiftKey) { const n = (ta.value.slice(ls).match(/^ {1,2}/) || [''])[0].length; if (n) { ta.setRangeText('', ls, ls + n, 'preserve'); ta.selectionStart = ta.selectionEnd = Math.max(ls, s - n); } }
+      else ta.setRangeText('  ', s, ta.selectionEnd, 'end');
+      changed();
+    } else if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey && yaml) {
+      // Keep YAML indentation: align under list items, indent one level after "key:".
+      e.preventDefault();
+      const line = ta.value.slice(ls, s), item = line.match(/^\s*-\s+/);
+      let ind = item ? ' '.repeat(item[0].length) : line.match(/^\s*/)[0];
+      if (/:\s*$/.test(line)) ind += '  ';
+      ta.setRangeText('\n' + ind, s, ta.selectionEnd, 'end');
+      changed();
+    } else if (e.key === 's' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('#mFoot button.primary').click(); }
+  });
+  sync(); caret(); check();
+  return () => { lines = 0; changed(); };
+}
+const tplSelect = () => `<select id="yTpl"><option value="">Insert template…</option>${Object.keys(YAML_TEMPLATES).map(k => `<option>${esc(k)}</option>`).join('')}</select>`;
+/** Modal YAML editor (used by apply -f - and kubectl edit). Resolves with the text, or null on cancel. */
 function openYamlEditor(initial, title = 'kubectl apply -f -', okLabel = 'Apply', isFile = false) {
   return new Promise(res => {
-    openModal(title, `<p>${isFile ? 'Edit the file and save. ' : 'Edit the manifest(s). Separate documents with <code>---</code>. '}Supported kinds: Deployment, Pod, Service, Namespace, ConfigMap, Secret, ServiceAccount, PersistentVolume, PersistentVolumeClaim, StorageClass, NetworkPolicy, Role, RoleBinding, ClusterRole, ClusterRoleBinding.</p>
-      <p>Insert template: <select id="yTpl"><option value="">—</option>${Object.keys(YAML_TEMPLATES).map(k => `<option>${esc(k)}</option>`).join('')}</select></p><textarea id="yText" spellcheck="false"></textarea>`,
+    openModal(title, `<div class="ed-bar"><span class="muted">${isFile ? 'Edit and save.' : 'Separate documents with <code>---</code>.'} Kinds: Deployment, Pod, Service, Namespace, ConfigMap, Secret, ServiceAccount, PV, PVC, StorageClass, NetworkPolicy, Role(Binding), ClusterRole(Binding).</span>${tplSelect()}</div>${editorHTML()}`,
       [{ label:'Cancel', fn:closeModal }, { label:okLabel, cls:'primary', fn:() => { const v = $('#yText').value; modalResolve = null; hideModal(); res(v); } }]);
     modalResolve = res;
     const ta = $('#yText'), sel = $('#yTpl');
     ta.value = initial != null ? initial : YAML_TEMPLATES['Deployment + Service'];
-    sel.onchange = () => { if (sel.value) ta.value = YAML_TEMPLATES[sel.value]; };
-    ta.addEventListener('keydown', e => {
-      if (e.key === 'Tab') { e.preventDefault(); const s = ta.selectionStart; ta.setRangeText('  ', s, ta.selectionEnd, 'end'); }
-      if (e.key === 's' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('#mFoot button.primary').click(); }
-    });
+    const refresh = wireEditor(ta);
+    sel.onchange = () => { if (sel.value) { ta.value = YAML_TEMPLATES[sel.value]; refresh(); ta.focus(); } };
     ta.focus();
+  });
+}
+/** vi/vim/nano: edit a file of the virtual filesystem. Resolves with { text, apply } or null. */
+function openFileEditor(path, initial, host) {
+  const isManifest = /\.(ya?ml|json)$/.test(path), yaml = isManifest || /\.conf$/.test(path), canApply = isManifest && host !== 'workstation' ? host === 'controlplane' : isManifest;
+  return new Promise(res => {
+    const done = apply => () => { const text = $('#yText').value; modalResolve = null; hideModal(); res({ text, apply }); };
+    openModal(`${isFile(path, host) ? 'vi' : 'new file'} · ${tildify(path, host)}`,
+      `<div class="ed-bar"><span class="fx-host">${host === 'workstation' ? 'student@cka-lab' : 'root@' + esc(host)}</span><span class="muted ed-path">${esc(path)}</span>${yaml ? tplSelect() : ''}</div>${editorHTML()}`,
+      [{ label:'Cancel', fn:closeModal }, ...(canApply ? [{ label:'Save & kubectl apply', fn:done(true) }] : []), { label:'Save', cls:'primary', fn:done(false) }]);
+    modalResolve = res;
+    const ta = $('#yText');
+    ta.value = initial;
+    const refresh = wireEditor(ta, yaml), sel = $('#yTpl');
+    if (sel) sel.onchange = () => { if (sel.value) { ta.value = YAML_TEMPLATES[sel.value] + '\n'; refresh(); ta.focus(); } };
+    ta.focus(); ta.setSelectionRange(0, 0);
+  });
+}
+function promptModal(title, label, value = '', okLabel = 'Create') {
+  return new Promise(res => {
+    openModal(title, `<label class="fld"><span>${label}</span><input id="pIn" spellcheck="false" autocomplete="off" value="${esc(value)}"></label>`,
+      [{ label:'Cancel', fn:closeModal }, { label:okLabel, cls:'primary', fn:() => { const v = $('#pIn').value.trim(); modalResolve = null; hideModal(); res(v || null); } }]);
+    modalResolve = res;
+    const inp = $('#pIn');
+    inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
+    inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('#mFoot button.primary').click(); } };
   });
 }
 
@@ -3727,8 +4325,16 @@ const LESSONS = [
     why:`Namespaces scope names, RBAC, quotas and NetworkPolicies. Your <b>kubeconfig context</b> stores a default namespace locally, so you don't need <code>-n</code> each time. On the exam, <b>always check which namespace a task asks for!</b>` },
   { d:'work', title:'YAML fast: --dry-run & files',
     task:`Generate YAML instead of writing it by hand (the #1 CKA time saver):<br>${T('kubectl run web2 --image=nginx --dry-run=client -o yaml > web2.yaml')}<br>${T('vi web2.yaml')} (e.g. add a label) → ${T('kubectl apply -f web2.yaml')}<br>Tip: ${T('export do="--dry-run=client -o yaml"')} then ${T('k create deploy x --image=nginx $do')}`,
-    check:() => S.stats.dryRun > 0 && Object.keys(S.fs.workstation || {}).some(f => f.endsWith('.yaml')) && findPod('web2', S.ctxNs)?.state === 'Running',
+    check:() => S.stats.dryRun > 0 && Object.keys(S.fs.workstation || {}).some(f => f.endsWith('.yaml') && !f.startsWith('/home/student/examples/')) && findPod('web2', S.ctxNs)?.state === 'Running',
     why:`<code>--dry-run=client -o yaml</code> builds the object locally and prints it without touching the cluster. Redirect it to a file, tweak the fields the imperative command can't set, then <code>apply</code>.` },
+  { d:'work', title:'Work with manifest files',
+    task:`Your workstation has a real-feeling Linux disk (see the <b>Files</b> tab).<br>${T('ls -la')} · ${T('tree examples')} · ${T('cat examples/deployment-service.yaml')}<br>${T('mkdir -p ~/cka && cp examples/deployment-service.yaml examples/role-rolebinding.yaml ~/cka/')}<br>${T("sed -i 's/replicas: 3/replicas: 2/' ~/cka/deployment-service.yaml")} · ${T('diff examples/deployment-service.yaml ~/cka/deployment-service.yaml')}<br>Apply the whole folder at once: ${T('kubectl apply -f ~/cka/')}`,
+    check:() => (S.stats.dirApply || 0) > 0 && !!findDep('api', 'default'),
+    why:`On the exam you'll juggle many YAML files. <code>kubectl apply -f DIR</code> applies every manifest in a folder (add <code>-R</code> to recurse), <code>sed -i</code> makes quick edits, and <code>diff</code> shows exactly what you changed before you apply it.` },
+  { d:'work', title:'Static pods',
+    task:`Static pods are started by a <b>kubelet</b> straight from files — no scheduler involved.<br>${T('ssh node-1')} · ${T('grep staticPodPath /var/lib/kubelet/config.yaml')}<br>${T('vi /etc/kubernetes/manifests/static-web.yaml')} → pick template "Static Pod" → Save<br>${T('exit')} · ${T('kubectl get pods -o wide')} → <b>static-web-node-1</b><br>Try ${T('kubectl delete pod static-web-node-1')} — it comes back!`,
+    check:() => S.pods.some(p => p.static && p.state === 'Running'),
+    why:`The kubelet watches <code>staticPodPath</code> (usually <code>/etc/kubernetes/manifests</code>) and runs every Pod manifest it finds. It posts a read-only <b>mirror pod</b> named <code>&lt;name&gt;-&lt;node&gt;</code> to the API server; deleting it via kubectl is pointless — remove the file instead. That's how kubeadm runs etcd, the API server, scheduler and controller-manager.` },
   { d:'work', title:'ConfigMaps & Secrets',
     task:`${T('kubectl create configmap app-config --from-literal=MODE=prod --from-literal=LOG_LEVEL=info')}<br>${T('kubectl create secret generic db-secret --from-literal=password=s3cr3t')}<br>${T('kubectl apply -f -')} → template "ConfigMap + Secret + Pod (env)"<br>${T('kubectl exec app -- env | grep -E \"MODE|DB_\"')}<br>${T("kubectl get secret db-secret -o jsonpath='{.data.password}' | base64 -d")}`,
     check:() => !!findCM('app-config', 'default') && !!findSecret('db-secret', 'default') && S.pods.some(p => p.state === 'Running' && (p.envFrom.length || Object.values(p.env).some(v => typeof v === 'object'))),
@@ -3936,13 +4542,73 @@ const CHEATS = [
   ['Scheduling', ['k label node node-2 disk=ssd', 'k taint nodes node-3 key=val:NoSchedule', 'k taint nodes node-3 key=val:NoSchedule-', 'k cordon node-1', 'k drain node-1 --ignore-daemonsets --force', 'k uncordon node-1']],
   ['Networking', ['k expose deploy web --port=80 --type=NodePort', 'k get endpoints web', 'k exec POD -- nslookup web', 'k exec POD -- wget -qO- web.default.svc.cluster.local', 'curl web 5']],
   ['Cluster ops', ['ssh controlplane', 'etcdctl snapshot save /opt/backup.db --endpoints=https://127.0.0.1:2379 ' + ETCD_TLS, 'etcdctl snapshot status /opt/backup.db -w table', 'etcdctl snapshot restore /opt/backup.db --data-dir=/var/lib/etcd-new', 'vi /etc/kubernetes/manifests/etcd.yaml', 'kubeadm upgrade plan', 'kubeadm token create --print-join-command', 'kubeadm certs check-expiration']],
-  ['Node troubleshooting', ['ssh node-1', 'systemctl status kubelet', 'journalctl -u kubelet', 'cat /var/lib/kubelet/config.yaml', 'systemctl restart kubelet', 'crictl ps', 'exit']],
+  ['Files & YAML', ['ls -la', 'cd examples', 'tree ~', 'mkdir -p ~/cka && cp ~/examples/*.yaml ~/cka/', "sed -i 's/replicas: 3/replicas: 5/' ~/cka/deployment-service.yaml", 'diff ~/examples/deployment-service.yaml ~/cka/deployment-service.yaml', 'kubectl apply -f ~/cka/', 'grep -rn image: ~/cka', "find / -name '*.yaml'", 'cat ~/examples/static-pod.yaml | kubectl apply -f -']],
+  ['Node troubleshooting', ['ssh node-1', 'systemctl status kubelet', 'journalctl -u kubelet', 'cat /var/lib/kubelet/config.yaml', 'grep staticPodPath /var/lib/kubelet/config.yaml', 'ls /etc/kubernetes/manifests', 'systemctl restart kubelet', 'crictl ps', 'exit']],
 ];
 function renderDocs() {
   $('#docs').innerHTML = `<p class="muted">Click any line to put it in the terminal. On the real exam you may use <a href="https://kubernetes.io/docs/reference/kubectl/quick-reference/" target="_blank" rel="noopener">kubernetes.io/docs</a>.</p>` +
     CHEATS.map(([h, cmds]) => `<div class="cheat"><h5>${h}</h5>${cmds.map(c => `<code class="try">${esc(c)}</code>`).join('')}</div>`).join('');
 }
 $('#docs').addEventListener('click', e => { const t = e.target.closest('code.try'); if (t) { cmdEl.value = t.textContent.replace(/^k /, 'kubectl '); cmdEl.focus(); } });
+
+/* =====================================================================
+   10d. FILE EXPLORER (graphical view of the virtual filesystem; every action runs a real shell command)
+   ===================================================================== */
+const FX = { host:null, open:new Set(), dots:false };
+const shq = p => /[\s'"$&|;<>]/.test(p) ? `'${p.replace(/'/g, '')}'` : p;
+const FX_ICON = {
+  dir:'<svg class="ic" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>',
+  file:'<svg class="ic" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></svg>',
+  yaml:'<svg class="ic" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13l-1.5 2L9 17M15 13l1.5 2-1.5 2"/></svg>',
+};
+function renderFiles() {
+  const pane = $('#files');
+  if (!pane || pane.classList.contains('hidden')) return;
+  const host = HOST(), here = cwd(), canKubectl = host === 'workstation' || host === 'controlplane';
+  if (FX.host !== host) { FX.host = host; FX.open = new Set(); FX.cwd = null; }
+  if (FX.cwd !== here) { FX.cwd = here; for (let p = here; p !== '/'; p = parentOf(p)) FX.open.add(p); }
+  const rows = [];
+  const walk = (dir, depth) => {
+    for (const k of listDir(dir, host)) {
+      if (!FX.dots && k.name.startsWith('.')) continue;
+      const open = k.dir && FX.open.has(k.path), manifest = !k.dir && /\.(ya?ml|json)$/.test(k.name);
+      const size = k.dir ? '' : fmtSize((fsOf(host)[k.path] || '').length);
+      rows.push(`<div class="fx-row${k.dir ? ' dir' : ''}${open ? ' open' : ''}${k.path === here ? ' here' : ''}${manifest ? ' yaml' : ''}" data-path="${esc(k.path)}" role="treeitem" style="--d:${depth}">`
+        + `<span class="chev">${k.dir ? '<svg class="ic" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>' : ''}</span>${k.dir ? FX_ICON.dir : manifest ? FX_ICON.yaml : FX_ICON.file}`
+        + `<span class="nm">${esc(k.name)}</span>${k.path === here ? '<span class="tag">cwd</span>' : ''}<span class="sz">${size}</span><span class="acts">`
+        + (k.dir ? `<button data-act="cd" title="cd into this folder">cd</button><button data-act="new" title="New file here">+</button>` : `${manifest && canKubectl ? '<button data-act="apply" title="kubectl apply -f">apply</button>' : ''}<button data-act="cat" title="cat">cat</button>`)
+        + `<button data-act="rm" class="del" title="Delete">✕</button></span></div>`);
+      if (open) walk(k.path, depth + 1);
+    }
+  };
+  walk('/', 0);
+  pane.innerHTML = `<div class="fx-bar"><span class="fx-host">${host === 'workstation' ? 'student@cka-lab' : 'root@' + esc(host)}</span><span class="fx-cwd">${esc(here)}</span><span class="sep"></span>`
+    + `<button data-fx="file" class="ghost">+ File</button><button data-fx="dir" class="ghost">+ Folder</button><button data-fx="dots" class="ghost${FX.dots ? ' on' : ''}" title="Show hidden files">.*</button></div>`
+    + `<div class="fx-tree" role="tree">${rows.join('')}</div>`
+    + `<p class="muted fx-hint">Click a file to open it in <b>vi</b>, a folder to expand it. Every action runs the matching shell command in the terminal. ${host === 'workstation' ? 'Use <code>ssh controlplane</code> / <code>ssh node-1</code> to browse other machines.' : 'Type <code>exit</code> to return to the workstation.'}</p>`;
+}
+$('#files').addEventListener('click', async e => {
+  const bar = e.target.closest('[data-fx]');
+  if (bar) {
+    if (bar.dataset.fx === 'dots') { FX.dots = !FX.dots; return renderFiles(); }
+    const dir = bar.dataset.fx === 'dir', name = await promptModal(dir ? 'New folder' : 'New file', `${dir ? 'Folder' : 'File'} path (relative to ${esc(tildify(cwd()))})`, dir ? 'manifests' : 'pod.yaml');
+    if (name) runCmd(dir ? `mkdir -p ${shq(name)}` : `vi ${shq(name)}`);
+    return;
+  }
+  const row = e.target.closest('.fx-row');
+  if (!row) return;
+  const path = row.dataset.path, act = e.target.closest('[data-act]')?.dataset.act, isD = row.classList.contains('dir');
+  if (act === 'cd') return runCmd(`cd ${shq(path)}`);
+  if (act === 'cat') return runCmd(`cat ${shq(path)}`);
+  if (act === 'apply') return runCmd(`kubectl apply -f ${shq(path)}`);
+  if (act === 'new') { const name = await promptModal('New file', `File name in ${esc(tildify(path))}`, 'pod.yaml'); if (name) runCmd(`vi ${shq(joinPath(path, name))}`); return; }
+  if (act === 'rm') {
+    return openModal(`Delete ${baseName(path)}?`, `<p>This runs <code>rm ${isD ? '-r ' : ''}${esc(path)}</code> on <b>${esc(HOST())}</b>.${isD ? ' Everything inside the folder is removed too.' : ''}</p>`,
+      [{ label:'Cancel', fn:closeModal }, { label:'Delete', cls:'warn', fn:() => { closeModal(); runCmd(`rm ${isD ? '-r ' : ''}${shq(path)}`); } }]);
+  }
+  if (isD) { FX.open.has(path) ? FX.open.delete(path) : FX.open.add(path); return renderFiles(); }
+  runCmd(`vi ${shq(path)}`);
+});
 
 /* =====================================================================
    11. WIRING & BOOT
@@ -3963,8 +4629,9 @@ document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => {
 });
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
   document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
-  for (const p of ['explain','events','docs']) $('#' + p).classList.toggle('hidden', b.dataset.tab !== p);
+  for (const p of ['explain','events','files','docs']) $('#' + p).classList.toggle('hidden', b.dataset.tab !== p);
   if (b.dataset.tab === 'events') renderEvents();
+  if (b.dataset.tab === 'files') renderFiles();
 });
 $('#nsFilter').onchange = e => { NS_FILTER = e.target.value; render(); };
 
