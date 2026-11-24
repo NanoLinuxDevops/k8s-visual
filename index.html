@@ -126,6 +126,7 @@ aside { width:480px; display:flex; flex-direction:column; gap:12px; min-height:0
 code.try { font:11.5px/1.5 var(--mono); color:#ffd08a; cursor:pointer; background:rgba(0,0,0,.3); border:1px solid var(--hair2); padding:1px 6px; border-radius:5px;
   display:inline-block; margin:2px 0; transition:border-color var(--d-hover) ease, background-color var(--d-hover) ease, transform var(--d-press) var(--ease-out); }
 code.try:active { transform:scale(0.98); }
+code.try.multi { display:block; white-space:pre; overflow-x:auto; padding:8px 10px; margin:6px 0; line-height:1.5; }
 @media (hover: hover) and (pointer: fine) { code.try:hover { background:rgba(91,141,239,.12); border-color:rgba(91,141,239,.45); } }
 
 /* explanation panel */
@@ -558,6 +559,8 @@ function freshState() {
     storageclasses: [{ kind:'StorageClass', name:'standard', provisioner:'rancher.io/local-path', isDefault:true, reclaimPolicy:'Delete', created:now() }],
     ctxNs:'default', cpVersion:K8S_VERSION, cpKubeadm:K8S_VERSION, etcdDataDir:'/var/lib/etcd', restored:{}, fs:{}, dirs:{}, mtime:{}, cwd:{}, oldPwd:{},
     env:{ do:'--dry-run=client -o yaml', now:'--force --grace-period=0' }, snaps:{}, etcdDirs:{}, shell:null,
+    pki:null, csrs:[],
+    kcfg:{ current:'kubernetes-admin@kubernetes', contexts:{ 'kubernetes-admin@kubernetes':{ cluster:'kubernetes', user:'kubernetes-admin' } }, users:{ 'kubernetes-admin':{ admin:true } } },
     nodeSeq: 0, lastBindings: [], history: [],
     stats: { deletedFrom: new Set(), curl: {}, undo: 0, nodeFailed: 0, sawBackoff: new Set(), drained: 0, canI: 0, dryRun: 0, jsonpath: 0,
              npBlocked: 0, sawConfigErr: 0, kubeletFixed: 0, setCtx: 0, restored: 0 },
@@ -775,9 +778,42 @@ function markDelete(p) {
 async function reconcile() {
   // Every controller gets a turn each pass (like independent goroutines in the real controller-manager).
   let did = false;
-  for (const c of [deploymentController, replicaSetController, garbageCollector, pvController, staticPodController, scheduler, kubelets, nodeController, endpointsController])
+  for (const c of [deploymentController, replicaSetController, garbageCollector, pvController, csrSigner, apiserverWatch, staticPodController, scheduler, kubelets, nodeController, endpointsController])
     if (await c()) did = true;
   return did;
+}
+// --- csrsigning controller (in kube-controller-manager): signs Approved CSRs with the cluster CA ---
+const SIGNERS = ['kubernetes.io/kube-apiserver-client', 'kubernetes.io/kube-apiserver-client-kubelet', 'kubernetes.io/kubelet-serving'];
+async function csrSigner() {
+  const todo = S.csrs.filter(c => c.approved && !c.denied && !c.certificate && SIGNERS.includes(c.signerName));
+  if (!todo.length) return false;
+  await step(`<b>kube-controller-manager</b> (csrsigning controller) sees approved CSR ${todo.map(c => `<b>${esc(c.name)}</b>`).join(', ')} → signs it with the <b>cluster CA</b> key (<code>/etc/kubernetes/pki/ca.key</code>) and stores the certificate in <code>status.certificate</code>.`,
+    [['api', 'cm', C.watch], ['cm', 'api', C.write], ['api', 'etcd', C.write]], () => todo.forEach(c => {
+      const r = (unpem(c.request) || {}).obj;
+      if (!r) return;
+      c.certificate = issueCert({ subj:r.subj, keyId:r.keyId, ca:'ca', use:c.usages.includes('server auth') ? 'server' : 'client', sans:r.sans, days:Math.max(1 / 24, (c.expirationSeconds || 31536000) / 86400) });
+    }));
+  return true;
+}
+// --- the control-plane kubelet restarts kube-apiserver when its static pod manifest changes or comes back ---
+async function apiserverWatch() {
+  const fs = S.fs.controlplane;
+  if (!fs) return false;
+  const m = fs['/etc/kubernetes/manifests/kube-apiserver.yaml'], k = pki();
+  if (k.apiHash === undefined) { k.apiHash = m ? hashStr(m) : null; return false; }
+  if (!m) {
+    if (k.apiDown) return false;
+    k.apiDown = true;
+    await step(`🛑 <b>kubelet@controlplane</b>: <code>kube-apiserver.yaml</code> is gone from <code>/etc/kubernetes/manifests</code> → it stops the <b>kube-apiserver</b> static pod. kubectl can't connect until the file is back.`, [['api', 'kubectl', C.del]]);
+    return true;
+  }
+  const h = hashStr(m);
+  if (!k.apiDown && h === k.apiHash) return false;
+  k.apiDown = false; k.apiHash = h;
+  const fresh = k.served !== issuedOf('apiserver');
+  k.served = issuedOf('apiserver');
+  await step(`♻️ <b>kubelet@controlplane</b> (re)starts the <b>kube-apiserver</b> static pod. On start it reads <code>/etc/kubernetes/pki/apiserver.crt</code>${fresh ? ` — the <b>renewed</b> certificate (valid until ${new Date(expiryOf('apiserver')).toUTCString().slice(5, 16)})` : ''}.`, [['api', 'etcd', C.write], ['api', 'kubectl', C.ok]]);
+  return true;
 }
 // --- Static pods: each kubelet runs Pod manifests found in its staticPodPath, no scheduler involved ---
 const STATIC_DIR = '/etc/kubernetes/manifests/';
@@ -1440,7 +1476,7 @@ function updateStats() {
     sel.innerHTML = `<option value="all">all namespaces</option>` + S.namespaces.map(n => `<option>${esc(n.name)}</option>`).join('');
     sel.value = S.namespaces.some(n => n.name === NS_FILTER) ? NS_FILTER : 'all';
   }
-  $('#ctxLabel').textContent = `ctx: kubernetes-admin@kubernetes · ns: ${S.ctxNs}`;
+  $('#ctxLabel').textContent = `ctx: ${S.kcfg.current} · ns: ${S.ctxNs}`;
 }
 function renderEvents() {
   const evs = [...S.events].sort((a, b) => a.time - b.time).slice(-150);
@@ -1549,6 +1585,14 @@ function cmManifest(c) { return { apiVersion:'v1', kind:'ConfigMap', metadata:{ 
 function secretManifest(s) { return { apiVersion:'v1', kind:'Secret', metadata:{ name:s.name, namespace:s.ns, creationTimestamp:iso(s.created) }, type:s.type,
   data:Object.fromEntries(Object.entries(s.data).map(([k, v]) => [k, b64(v)])) }; }
 function saManifest(s) { return { apiVersion:'v1', kind:'ServiceAccount', metadata:{ name:s.name, namespace:s.ns, creationTimestamp:iso(s.created) } }; }
+const csrCondition = c => c.denied ? 'Denied' : c.approved ? (c.certificate ? 'Approved,Issued' : 'Approved') : 'Pending';
+const fmtDur = s => s % 86400 === 0 ? s / 86400 * 24 + 'h' : s % 3600 === 0 ? s / 3600 + 'h' : Math.round(s / 60) + 'm';
+function csrManifest(c) {
+  return { apiVersion:'certificates.k8s.io/v1', kind:'CertificateSigningRequest', metadata:{ name:c.name, creationTimestamp:iso(c.created) },
+    spec:{ request:b64(c.request), signerName:c.signerName, expirationSeconds:c.expirationSeconds || undefined, usages:c.usages, username:c.username, groups:['system:masters', 'system:authenticated'] },
+    status:c.approved || c.denied ? { conditions:[{ type:c.denied ? 'Denied' : 'Approved', status:'True', reason:c.denied ? 'KubectlDeny' : 'KubectlApprove', message:`This CSR was ${c.denied ? 'denied' : 'approved'} by kubectl certificate ${c.denied ? 'deny' : 'approve'}.` }],
+      certificate:c.certificate ? b64(c.certificate) : undefined } : {} };
+}
 function roleManifest(r) { return { apiVersion:'rbac.authorization.k8s.io/v1', kind:r.kind, metadata:{ name:r.name, namespace:r.ns, creationTimestamp:iso(r.created) },
   rules:r.rules.map(x => ({ apiGroups:[x.resources.some(y => /deployments|replicasets/.test(y)) ? 'apps' : ''], resources:x.resources, verbs:x.verbs })) }; }
 function bindingManifest(b) { return { apiVersion:'rbac.authorization.k8s.io/v1', kind:b.kind, metadata:{ name:b.name, namespace:b.ns, creationTimestamp:iso(b.created) },
@@ -1710,6 +1754,8 @@ function describeGeneric(kind, o) {
   if (kind === 'netpol') return head + `Spec:\n  PodSelector:     ${selStr(o.podSelector) || '<none> (Allowing the specific traffic to all pods in this namespace)'}\n  Allowing ingress traffic:\n${o.ingress.length ? o.ingress.map(r => `    To Port: ${r.ports.join(', ') || '<any> (traffic allowed to all ports)'}\n    From:\n${r.from.map(f => f.podSelector ? `      PodSelector: ${selStr(f.podSelector)}` : `      NamespaceSelector: ${selStr(f.namespaceSelector)}`).join('\n') || '      <any> (traffic not restricted by source)'}`).join('\n    ----------\n') : '    <none> (Selected pods are isolated for ingress connectivity)'}\n  Not affecting egress traffic\n  Policy Types: Ingress`;
   if (kind === 'namespace') return head + `Status:       Active\n\nNo resource quota.\n\nNo LimitRange resource.`;
   if (kind === 'serviceaccount') return head + `Image pull secrets:  <none>\nMountable secrets:   <none>\nTokens:              <none>\nEvents:              <none>`;
+  if (kind === 'csr') { const r = (unpem(o.request) || {}).obj || { subj:[] };
+    return `Name:               ${o.name}\nLabels:             <none>\nAnnotations:        <none>\nCreationTimestamp:  ${new Date(o.created).toUTCString()}\nRequesting User:    ${o.username}\nSigner:             ${o.signerName}\nRequested Duration: ${o.expirationSeconds ? fmtDur(o.expirationSeconds) : '<none>'}\nStatus:             ${csrCondition(o)}\nSubject:\n         Common Name:    ${subjCN(r.subj)}\n         Serial Number:  \n${subjO(r.subj).map(g => `         Organization:   ${g}\n`).join('')}Events:  <none>`; }
   return head;
 }
 
@@ -1804,7 +1850,7 @@ function tokenize(line) {
   flush();
   return out;
 }
-const BOOL_FLAGS = ['force','ignore-daemonsets','delete-emptydir-data','all','watch','help','wide','show-labels','all-namespaces','overwrite','current','print-join-command','it','stdin','tty','list','no-headers','rm','raw','etcd-upgrade','yes'];
+const BOOL_FLAGS = ['force','ignore-daemonsets','delete-emptydir-data','all','watch','help','wide','show-labels','all-namespaces','overwrite','current','print-join-command','it','stdin','tty','list','no-headers','rm','raw','etcd-upgrade','yes','embed-certs'];
 const MULTI_FLAGS = ['from-literal','from-file','verb','resource','user','group','serviceaccount','env','labels'];
 function parseArgs(tokens) {
   const args = [], flags = {};
@@ -1835,13 +1881,14 @@ const KIND = { po:'pod', pod:'pod', pods:'pod', deploy:'deployment', deployment:
   role:'role', roles:'role', rolebinding:'rolebinding', rolebindings:'rolebinding',
   clusterrole:'clusterrole', clusterroles:'clusterrole', clusterrolebinding:'clusterrolebinding', clusterrolebindings:'clusterrolebinding',
   pv:'pv', persistentvolume:'pv', persistentvolumes:'pv', pvc:'pvc', persistentvolumeclaim:'pvc', persistentvolumeclaims:'pvc',
-  sc:'sc', storageclass:'sc', storageclasses:'sc', netpol:'netpol', networkpolicy:'netpol', networkpolicies:'netpol', ep:'endpoints', endpoints:'endpoints' };
+  sc:'sc', storageclass:'sc', storageclasses:'sc', netpol:'netpol', networkpolicy:'netpol', networkpolicies:'netpol', ep:'endpoints', endpoints:'endpoints',
+  csr:'csr', csrs:'csr', certificatesigningrequest:'csr', certificatesigningrequests:'csr' };
 /** REST resource name (used in RBAC rules, URLs and errors) and API group per kind. */
 const RES = { pod:'pods', node:'nodes', deployment:'deployments', service:'services', rs:'replicasets', event:'events', namespace:'namespaces', configmap:'configmaps',
   secret:'secrets', serviceaccount:'serviceaccounts', role:'roles', rolebinding:'rolebindings', clusterrole:'clusterroles', clusterrolebinding:'clusterrolebindings',
-  pv:'persistentvolumes', pvc:'persistentvolumeclaims', sc:'storageclasses', netpol:'networkpolicies', endpoints:'endpoints' };
+  pv:'persistentvolumes', pvc:'persistentvolumeclaims', sc:'storageclasses', netpol:'networkpolicies', endpoints:'endpoints', csr:'certificatesigningrequests' };
 const GROUP = { deployment:'apps', rs:'apps', role:'rbac.authorization.k8s.io', rolebinding:'rbac.authorization.k8s.io', clusterrole:'rbac.authorization.k8s.io',
-  clusterrolebinding:'rbac.authorization.k8s.io', sc:'storage.k8s.io', netpol:'networking.k8s.io' };
+  clusterrolebinding:'rbac.authorization.k8s.io', sc:'storage.k8s.io', netpol:'networking.k8s.io', csr:'certificates.k8s.io' };
 const PLURAL = RES;
 const NOUN = k => RES[k] + (GROUP[k] ? '.' + GROUP[k] : '');
 const resOfToken = t => { const k = KIND[String(t).toLowerCase().replace(/\.(apps|rbac\.authorization\.k8s\.io|networking\.k8s\.io|storage\.k8s\.io)$/, '')]; return k ? RES[k] : t; };
@@ -1931,6 +1978,8 @@ const LIST = {
   sc: { items:'storageclasses', manifest:scManifest, cluster:true, head:() => ['NAME','PROVISIONER','RECLAIMPOLICY','VOLUMEBINDINGMODE','ALLOWVOLUMEEXPANSION','AGE'],
     row:s => [s.name + (s.isDefault ? ' (default)' : ''), s.provisioner, s.reclaimPolicy, 'Immediate', 'false', age(s.created)] },
   netpol: { items:'netpols', manifest:npManifest, head:() => ['NAME','POD-SELECTOR','AGE'], row:n => [n.name, selStr(n.podSelector) || '<none>', age(n.created)] },
+  csr: { items:'csrs', manifest:csrManifest, cluster:true, head:() => ['NAME','AGE','SIGNERNAME','REQUESTOR','REQUESTEDDURATION','CONDITION'],
+    row:c => [c.name, age(c.created), c.signerName, c.username, c.expirationSeconds ? fmtDur(c.expirationSeconds) : '<none>', csrCondition(c)] },
   endpoints: { items:ns => LIST.service.items(ns), manifest:s => ({ apiVersion:'v1', kind:'Endpoints', metadata:{ name:s.name, namespace:s.ns }, subsets:[{ addresses:epAddrs(s).map(ip => ({ ip })) }] }),
     find:(n, ns) => LIST.service.find(n, ns), head:() => ['NAME','ENDPOINTS','AGE'], row:s => [s.name, epAddrs(s).map(ip => `${ip}:${s.targetPort}`).join(',') || '<none>', age(s.created)] },
 };
@@ -2078,7 +2127,8 @@ const CMDS = {
     sub = { deploy:'deployment', ns:'namespace', cm:'configmap', sa:'serviceaccount' }[sub] || sub;
     if (!sub) return err('error: must specify one of -f and -k\n\nCreate a resource from a file or from stdin.');
     if (sub === 'secret') {
-      if (name !== 'generic') return err(name ? `error: this simulator supports "kubectl create secret generic" (got "${name}")` : 'error: you must specify a secret type: docker-registry | generic | tls');
+      if (name === 'tls') return createTlsSecret(rest[0], flags);
+      if (name !== 'generic') return err(name ? `error: this simulator supports "kubectl create secret generic|tls" (got "${name}")` : 'error: you must specify a secret type: docker-registry | generic | tls');
       name = rest[0];
     }
     const H = CREATE[sub];
@@ -2381,20 +2431,40 @@ const CMDS = {
   },
 
   async auth(args, flags) {
-    if (args[0] !== 'can-i') return err('error: supported: kubectl auth can-i VERB RESOURCE [--as=USER] [-n NS] | kubectl auth can-i --list --as=USER');
-    const user = typeof flags.as === 'string' ? flags.as : ADMIN.user;
+    const id = flags._ident || { user:ADMIN.user, groups:ADMIN.groups };
+    if (args[0] === 'whoami') {
+      await step(`<b>SelfSubjectReview</b>: the API server echoes back who it authenticated you as — ${id.via || 'the kubeconfig admin client certificate'}.`, [['kubectl','api',C.req],['api','kubectl',C.ok]]);
+      return print(table([['ATTRIBUTE','VALUE'], ['Username', id.user], ['Groups', `[${[...id.groups, ...(id.groups.includes('system:authenticated') ? [] : ['system:authenticated'])].join(' ')}]`]]));
+    }
+    if (args[0] !== 'can-i') return err('error: supported: kubectl auth whoami | kubectl auth can-i VERB RESOURCE [--as=USER] [-n NS] | kubectl auth can-i --list --as=USER');
+    const user = id.user, groups = id.groups || [];
     if (flags.list) {
       await step(`<b>SelfSubjectRulesReview</b>: the API server collects every rule granted to <b>${esc(user)}</b> in namespace ${CMD_NS}.`, [['kubectl','api',C.req],['api','etcd',C.write],['api','kubectl',C.ok]]);
-      const rules = rulesFor(user, CMD_NS);
+      const rules = rulesFor(user, CMD_NS, groups);
       return print(table([['Resources','Non-Resource URLs','Resource Names','Verbs'], ...rules.map(r => [r.resources.join(', '), '[]', '[]', '[' + r.verbs.join(' ') + ']'])]));
     }
     const [, verbRaw, resRaw] = args;
     if (!verbRaw || !resRaw) return err('error: you must specify two arguments: verb resource or a non-resource URL\nSee \'kubectl auth can-i -h\' for help and examples');
     const resource = resOfToken(resRaw.split('/')[0]);
-    const r = authorize(user, verbRaw, resource, CMD_NS);
+    const r = authorize(user, verbRaw, resource, CMD_NS, groups);
     S.stats.canI++;
     await step(`<b>SelfSubjectAccessReview</b>: "can <b>${esc(user)}</b> <b>${esc(verbRaw)}</b> <b>${esc(resource)}</b> in namespace <b>${CMD_NS}</b>?" The RBAC authorizer walks RoleBindings in that namespace and all ClusterRoleBindings. ${r.allowed ? `✅ Allowed by ${esc(r.reason)}.` : '❌ No binding grants it (RBAC is deny-by-default).'}`,
       [['kubectl','api',C.req],['api','etcd',C.write],['api','kubectl',r.allowed ? C.ok : C.del]], () => print(r.allowed ? 'yes' : 'no', r.allowed ? 'ok' : 'err'));
+  },
+
+  async certificate(args) {
+    const [op, ...names] = args;
+    if (!['approve', 'deny'].includes(op)) return err('error: supported: kubectl certificate approve|deny CSR_NAME...');
+    if (!names.length) return err(`error: one or more CSRs must be specified as <name> or -f <filename>`);
+    for (const name of names) {
+      const c = findOf('csr', name);
+      if (!c) { await apiErr(notFound('csr', name), 'not found'); continue; }
+      if (op === 'approve' && c.denied) { await apiErr(`error: certificatesigningrequest.certificates.k8s.io/${name} is already Denied`, 'already denied'); continue; }
+      await writePath(`PUT /apis/certificates.k8s.io/v1/certificatesigningrequests/<b>${esc(name)}</b>/approval (condition ${op === 'approve' ? 'Approved' : 'Denied'})`,
+        () => { if (op === 'approve') c.approved = true; else c.denied = true; },
+        `certificatesigningrequest.certificates.k8s.io/${name} ${op === 'approve' ? 'approved' : 'denied'}`,
+        op === 'approve' ? `The <b>Approved</b> condition is stored in etcd. Approval ≠ signing: the <b>csrsigning controller</b> in kube-controller-manager now has to issue the certificate.` : `The CSR is marked <b>Denied</b> — it will never be signed.`);
+    }
   },
 
   async exec(args, flags) {
@@ -2411,20 +2481,59 @@ const CMDS = {
   },
 
   async config(args, flags) {
-    const sub = args[0];
-    if (sub === 'current-context') return print('kubernetes-admin@kubernetes');
-    if (sub === 'get-contexts') return print(table([['CURRENT','NAME','CLUSTER','AUTHINFO','NAMESPACE'], ['*','kubernetes-admin@kubernetes','kubernetes','kubernetes-admin', S.ctxNs === 'default' ? '' : S.ctxNs]]));
-    if (sub === 'use-context') return args[1] === 'kubernetes-admin@kubernetes' ? print('Switched to context "kubernetes-admin@kubernetes".') : err(`error: no context exists with the name: "${args[1] || ''}"`);
-    if (sub === 'view') return print(`apiVersion: v1\nclusters:\n- cluster:\n    certificate-authority-data: DATA+OMITTED\n    server: https://192.168.49.2:6443\n  name: kubernetes\ncontexts:\n- context:\n    cluster: kubernetes\n${S.ctxNs !== 'default' ? `    namespace: ${S.ctxNs}\n` : ''}    user: kubernetes-admin\n  name: kubernetes-admin@kubernetes\ncurrent-context: kubernetes-admin@kubernetes\nkind: Config\npreferences: {}\nusers:\n- name: kubernetes-admin\n  user:\n    client-certificate-data: DATA+OMITTED\n    client-key-data: DATA+OMITTED`);
-    if (sub === 'set-context') {
-      if (!flags.current && args[1] !== 'kubernetes-admin@kubernetes') return err('error: you must specify a context name or --current');
-      if (typeof flags.namespace !== 'string') return print('Context "kubernetes-admin@kubernetes" modified.');
-      S.ctxNs = flags.namespace; S.stats.setCtx++;
-      if (trace) addStepLi(`🧭 kubeconfig updated locally: the default namespace for every following command is now <b>${esc(flags.namespace)}</b>. (Nothing is sent to the cluster — contexts live in <code>~/.kube/config</code>.)`, '');
-      scheduleRender();
-      return print('Context "kubernetes-admin@kubernetes" modified.');
+    const sub = args[0], K = S.kcfg;
+    K.contexts[K.current].ns = S.ctxNs;
+    if (sub === 'current-context') return print(K.current);
+    if (sub === 'get-contexts') return print(table([['CURRENT','NAME','CLUSTER','AUTHINFO','NAMESPACE'], ...Object.entries(K.contexts).map(([n, c]) => [n === K.current ? '*' : '', n, c.cluster, c.user, c.ns && c.ns !== 'default' ? c.ns : ''])]));
+    if (sub === 'get-users') return print(['NAME', ...Object.keys(K.users)].join('\n'));
+    if (sub === 'get-clusters') return print('NAME\nkubernetes');
+    if (sub === 'view') return print(kubeconfigText(flags.raw === true));
+    if (sub === 'use-context') {
+      const n = args[1];
+      if (!K.contexts[n]) return err(`error: no context exists with the name: "${n || ''}"`);
+      K.current = n; S.ctxNs = K.contexts[n].ns || 'default';
+      saveKubeconfig(); scheduleRender();
+      if (trace) addStepLi(`🧭 kubeconfig: current context is now <b>${esc(n)}</b> (user <b>${esc(K.contexts[n].user)}</b>). Every following kubectl command authenticates with that user's credentials.`, '');
+      return print(`Switched to context "${n}".`);
     }
-    err('error: supported: config current-context | get-contexts | view | use-context NAME | set-context --current --namespace=NS');
+    if (sub === 'set-credentials') {
+      const name = args[1], cert = flags['client-certificate'], key = flags['client-key'];
+      if (!name) return err('error: you must specify a non-empty user name');
+      if (typeof cert !== 'string' || typeof key !== 'string') return err('error: this simulator expects client certificate auth: --client-certificate=FILE --client-key=FILE [--embed-certs=true]');
+      const cp = resolvePath(cert), kp = resolvePath(key), fs = fsOf();
+      if (fs[cp] === undefined) return err(`error: could not stat client-certificate file ${cert}: stat ${cert}: no such file or directory`);
+      if (fs[kp] === undefined) return err(`error: could not stat client-key file ${key}: stat ${key}: no such file or directory`);
+      const embed = flags['embed-certs'] === true || flags['embed-certs'] === 'true';
+      K.users[name] = embed ? { cert:fs[cp], key:fs[kp] } : { certPath:cp, keyPath:kp, host:HOST() };
+      saveKubeconfig();
+      if (trace) addStepLi(`🪪 kubeconfig: user <b>${esc(name)}</b> now authenticates with the client certificate ${embed ? '<b>embedded</b> (base64) in the kubeconfig' : `files <code>${esc(cp)}</code> / <code>${esc(kp)}</code>`}. Nothing was sent to the cluster.`, '');
+      return print(`User "${name}" set.`);
+    }
+    if (sub === 'set-cluster') return print(`Cluster "${args[1] || 'kubernetes'}" set.`);
+    if (sub === 'set-context') {
+      const name = flags.current ? K.current : args[1];
+      if (!name) return err('error: you must specify a non-empty context name or --current');
+      const existed = !!K.contexts[name], c = K.contexts[name] = K.contexts[name] || { cluster:'kubernetes', user:'' };
+      if (typeof flags.cluster === 'string') c.cluster = flags.cluster;
+      if (flags.user) c.user = [].concat(flags.user)[0];
+      if (typeof flags.namespace === 'string') {
+        c.ns = flags.namespace;
+        if (name === K.current) {
+          S.ctxNs = flags.namespace; S.stats.setCtx++;
+          if (trace) addStepLi(`🧭 kubeconfig updated locally: the default namespace for every following command is now <b>${esc(flags.namespace)}</b>. (Nothing is sent to the cluster — contexts live in <code>~/.kube/config</code>.)`, '');
+          scheduleRender();
+        }
+      }
+      saveKubeconfig();
+      return print(`Context "${name}" ${existed ? 'modified' : 'created'}.`);
+    }
+    if (sub === 'delete-context') {
+      if (!K.contexts[args[1]]) return err(`error: cannot delete context ${args[1] || ''}, not in kubeconfig`);
+      if (args[1] === K.current) return err('error: cannot delete the current context — use-context another one first (simulator safety)');
+      delete K.contexts[args[1]]; saveKubeconfig();
+      return print(`deleted context ${args[1]} from /home/student/.kube/config`);
+    }
+    err('error: supported: config current-context | get-contexts | get-users | view [--raw] | use-context NAME | set-context NAME|--current [--cluster=] [--user=] [--namespace=] | set-credentials NAME --client-certificate=F --client-key=F [--embed-certs=true] | delete-context NAME');
   },
 
   async version() {
@@ -2440,7 +2549,8 @@ const CMDS = {
     const info = { pod:['po','v1','Pod'], node:['no','v1','Node'], namespace:['ns','v1','Namespace'], service:['svc','v1','Service'], endpoints:['ep','v1','Endpoints'], configmap:['cm','v1','ConfigMap'],
       secret:['','v1','Secret'], serviceaccount:['sa','v1','ServiceAccount'], pv:['pv','v1','PersistentVolume'], pvc:['pvc','v1','PersistentVolumeClaim'], event:['ev','v1','Event'],
       deployment:['deploy','apps/v1','Deployment'], rs:['rs','apps/v1','ReplicaSet'], netpol:['netpol','networking.k8s.io/v1','NetworkPolicy'], sc:['sc','storage.k8s.io/v1','StorageClass'],
-      role:['','rbac.authorization.k8s.io/v1','Role'], rolebinding:['','rbac.authorization.k8s.io/v1','RoleBinding'], clusterrole:['','rbac.authorization.k8s.io/v1','ClusterRole'], clusterrolebinding:['','rbac.authorization.k8s.io/v1','ClusterRoleBinding'] };
+      role:['','rbac.authorization.k8s.io/v1','Role'], rolebinding:['','rbac.authorization.k8s.io/v1','RoleBinding'], clusterrole:['','rbac.authorization.k8s.io/v1','ClusterRole'], clusterrolebinding:['','rbac.authorization.k8s.io/v1','ClusterRoleBinding'],
+      csr:['csr','certificates.k8s.io/v1','CertificateSigningRequest'] };
     for (const [k, [sn, av, kd]] of Object.entries(info)) rows.push([RES[k], sn, av, String(k === 'event' || !(LIST[k] || {}).cluster), kd]);
     print(table(rows));
   },
@@ -2510,7 +2620,7 @@ const VERBS = ['get','list','watch','create','update','patch','delete','deleteco
 /** Generic "create or configure" of a stored object through the API write path. */
 async function upsert(list, obj, kind, mode) {
   const cur = S[list].find(x => x.name === obj.name && (x.ns || '') === (obj.ns || ''));
-  const noun = kind === 'netpol' ? 'networkpolicy.networking.k8s.io' : kind === 'pv' ? 'persistentvolume' : kind === 'pvc' ? 'persistentvolumeclaim' : kind === 'sc' ? 'storageclass.storage.k8s.io' : /role/.test(kind) ? kind + '.rbac.authorization.k8s.io' : kind;
+  const noun = kind === 'netpol' ? 'networkpolicy.networking.k8s.io' : kind === 'csr' ? 'certificatesigningrequest.certificates.k8s.io' : kind === 'pv' ? 'persistentvolume' : kind === 'pvc' ? 'persistentvolumeclaim' : kind === 'sc' ? 'storageclass.storage.k8s.io' : /role/.test(kind) ? kind + '.rbac.authorization.k8s.io' : kind;
   if (cur && mode === 'create') return apiErr(`Error from server (AlreadyExists): error when creating "STDIN": ${NOUN(kind)} "${obj.name}" already exists`, 'already exists');
   if (cur) {
     if (kind === 'pvc' && cur.phase === 'Bound' && (cur.request !== obj.request || cur.storageClassName !== obj.storageClassName)) return err(`The PersistentVolumeClaim "${obj.name}" is invalid: spec: Forbidden: spec is immutable after creation except resources.requests and volumeAttributesClassName for bound claims`);
@@ -2520,6 +2630,7 @@ async function upsert(list, obj, kind, mode) {
 }
 const ETCD_NOTE = {
   secret:'Secret stored in etcd — values are only <b>base64-encoded, not encrypted</b> (unless you configure an EncryptionConfiguration). Protect Secrets with RBAC.',
+  csr:'CertificateSigningRequest stored as <b>Pending</b>. Nothing is signed until someone with permission <b>approves</b> it (<code>kubectl certificate approve</code>); then the controller-manager\'s <b>csrsigning</b> controller signs it with the cluster CA.',
   pv:'PersistentVolume stored: a piece of storage provisioned by an admin. It is <b>cluster-scoped</b> and waits as <b>Available</b> until a claim binds it.',
   pvc:'PersistentVolumeClaim stored as <b>Pending</b>. The <b>PV controller</b> will try to bind it to a matching PV (or dynamically provision one).',
   netpol:'NetworkPolicy stored. The <b>CNI plugin</b> (not kube-proxy!) enforces it: once a pod is selected by any policy, only explicitly allowed ingress reaches it.',
@@ -2538,7 +2649,7 @@ async function applyDoc(doc, mode = 'apply') {
   const prevNs = CMD_NS;
   if (md.namespace) CMD_NS = String(md.namespace);
   try {
-    const clusterKinds = ['Namespace','PersistentVolume','StorageClass','ClusterRole','ClusterRoleBinding'];
+    const clusterKinds = ['Namespace','PersistentVolume','StorageClass','ClusterRole','ClusterRoleBinding','CertificateSigningRequest'];
     if (!clusterKinds.includes(kind) && await nsMissing()) return;
     const spec = doc.spec || {}, ns = CMD_NS;
     if (mode === 'delete') {
@@ -2608,6 +2719,17 @@ async function applyDoc(doc, mode = 'apply') {
         return upsert('pvcs', { kind:'PersistentVolumeClaim', name, ns, request:req, accessModes:am, storageClassName:scName, phase:'Pending', volumeName:spec.volumeName || null, capacity:null, created:now() }, 'pvc', mode);
       }
       case 'StorageClass': return upsert('storageclasses', { kind:'StorageClass', name, provisioner:String(doc.provisioner || 'kubernetes.io/no-provisioner'), reclaimPolicy:doc.reclaimPolicy || 'Delete', isDefault:((md.annotations || {})['storageclass.kubernetes.io/is-default-class']) === 'true', created:now() }, 'sc', mode);
+      case 'CertificateSigningRequest': {
+        let raw = '';
+        try { raw = unb64(String(spec.request || '').replace(/\s+/g, '')); } catch { /* reported below */ }
+        const r = unpem(raw);
+        if (!r || r.type !== 'CERTIFICATE REQUEST') return err(`The CertificateSigningRequest "${name}" is invalid: spec.request: Invalid value: []byte{...}: PEM block type must be CERTIFICATE REQUEST\nHint: request must be the base64 of the .csr file on ONE line:  cat ${name}.csr | base64 | tr -d "\\n"`);
+        if (!spec.signerName) return err(`The CertificateSigningRequest "${name}" is invalid: spec.signerName: Required value`);
+        if (!Array.isArray(spec.usages) || !spec.usages.length) return err(`The CertificateSigningRequest "${name}" is invalid: spec.usages: Required value (e.g. ["client auth"])`);
+        if (findOf('csr', String(name))) return mode === 'create' ? apiErr(`Error from server (AlreadyExists): error when creating "STDIN": certificatesigningrequests.certificates.k8s.io "${name}" already exists`, 'already exists') : print(`certificatesigningrequest.certificates.k8s.io/${name} unchanged`);
+        return upsert('csrs', { kind:'CertificateSigningRequest', name, request:raw, signerName:String(spec.signerName), usages:spec.usages.map(String),
+          expirationSeconds:spec.expirationSeconds ? +spec.expirationSeconds : null, username:ADMIN.user, approved:false, denied:false, certificate:null, created:now() }, 'csr', mode);
+      }
       case 'NetworkPolicy': {
         const types = spec.policyTypes || ['Ingress'];
         const ingress = !types.includes('Ingress') ? null : (spec.ingress || []).map(r => ({
@@ -2699,6 +2821,18 @@ function rulesFrom(flags) {
   if (bad) throw new Error(`invalid verb: '${bad}'`);
   return [{ verbs, resources }];
 }
+/** kubectl create secret tls NAME --cert=FILE --key=FILE */
+async function createTlsSecret(name, flags) {
+  if (!name) return err('error: exactly one NAME is required, got 0');
+  if (typeof flags.cert !== 'string' || typeof flags.key !== 'string') return err('error: required flag(s) "cert", "key" not set');
+  const fs = fsOf(), ct = fs[resolvePath(flags.cert)], kt = fs[resolvePath(flags.key)];
+  if (ct === undefined) return err(`error: open ${flags.cert}: no such file or directory`);
+  if (kt === undefined) return err(`error: open ${flags.key}: no such file or directory`);
+  const c = unpem(ct), k = unpem(kt);
+  if (!c || c.type !== 'CERTIFICATE' || !k || k.type !== 'PRIVATE KEY') return err('error: failed to load key pair tls: failed to find any PEM data in input');
+  if (c.obj.keyId !== k.obj.id) return err('error: failed to load key pair tls: private key does not match public key');
+  return persist('secrets', { kind:'Secret', name, ns:CMD_NS, type:'kubernetes.io/tls', data:{ 'tls.crt':ct, 'tls.key':kt }, created:now() }, 'secret', secretManifest, flags, `secret/${name} created`);
+}
 const CREATE = {
   async deployment(name, flags) {
     if (!flags.image || flags.image === true) return err('error: required flag(s) "image" not set');
@@ -2746,31 +2880,32 @@ const CREATE = {
 };
 
 /* ---- RBAC authorizer (what the API server runs on every request) ---- */
-function subjectMatches(user, ns) {
+function subjectMatches(user, ns, groups = []) {
   const sa = user.match(/^system:serviceaccount:([^:]+):(.+)$/);
   return s => sa ? (s.kind === 'ServiceAccount' && s.name === sa[2] && (s.namespace || ns) === sa[1]) || (s.kind === 'Group' && (s.name === 'system:serviceaccounts' || s.name === 'system:serviceaccounts:' + sa[1]))
-    : (s.kind === 'User' && s.name === user) || (s.kind === 'Group' && (s.name === 'system:authenticated' || (user === ADMIN.user && ADMIN.groups.includes(s.name))));
+    : (s.kind === 'User' && s.name === user) || (s.kind === 'Group' && (s.name === 'system:authenticated' || groups.includes(s.name) || (user === ADMIN.user && ADMIN.groups.includes(s.name))));
 }
-function grantsFor(user, ns) {
-  const m = subjectMatches(user, ns), out = [];
+function grantsFor(user, ns, groups = []) {
+  const m = subjectMatches(user, ns, groups), out = [];
   for (const b of S.clusterrolebindings) if (b.subjects.some(m)) { const r = findCR(b.roleRef.name); if (r) out.push({ r, via:`ClusterRoleBinding "${b.name}" → ClusterRole "${r.name}"` }); }
-  for (const b of S.rolebindings.filter(b => b.ns === ns)) if (b.subjects.some(subjectMatches(user, b.ns))) {
+  for (const b of S.rolebindings.filter(b => b.ns === ns)) if (b.subjects.some(subjectMatches(user, b.ns, groups))) {
     const r = b.roleRef.kind === 'ClusterRole' ? findCR(b.roleRef.name) : findRole(b.roleRef.name, ns);
     if (r) out.push({ r, via:`RoleBinding "${ns}/${b.name}" → ${b.roleRef.kind} "${r.name}"` });
   }
   return out;
 }
-function authorize(user, verb, resource, ns) {
+function authorize(user, verb, resource, ns, groups = []) {
   const ok = x => (x.verbs.includes('*') || x.verbs.includes(verb)) && (x.resources.includes('*') || x.resources.includes(resource));
-  const g = grantsFor(user, ns).find(g => g.r.rules.some(ok));
+  const g = grantsFor(user, ns, groups).find(g => g.r.rules.some(ok));
   return g ? { allowed:true, reason:g.via } : { allowed:false };
 }
-const rulesFor = (user, ns) => grantsFor(user, ns).flatMap(g => g.r.rules);
+const rulesFor = (user, ns, groups = []) => grantsFor(user, ns, groups).flatMap(g => g.r.rules);
 /** Map a kubectl invocation to the RBAC verb/resource it needs (for --as impersonation). */
 function rbacNeed(verb, args) {
   const t = target(args), k = t.kind;
   const map = { get:[t.name ? 'get' : 'list', k], describe:['get', k], delete:['delete', k], edit:['update', k], label:['patch', k],
     run:['create', 'pod'], logs:['get', 'pod'], exec:['create', 'pod'], scale:['patch', 'deployment'], set:['patch', 'deployment'], rollout:['patch', 'deployment'],
+    certificate:['update', 'csr'],
     expose:['create', 'service'], top:['list', 'pod'], create:['create', KIND[{ deploy:'deployment', cm:'configmap', sa:'serviceaccount' }[args[0]] || args[0]]] };
   const n = map[verb];
   return n && n[1] ? { verb:n[0], resource:RES[n[1]], kind:n[1] } : null;
@@ -2882,6 +3017,8 @@ const HELP = `KubeCircuit CKA lab — the "kubectl"/"k" prefix is optional for k
                   auth can-i VERB RESOURCE --as=USER [-n NS] · any command with --as=USER is checked by RBAC
  Files / YAML     … --dry-run=client -o yaml > file.yaml · vi file.yaml · cat · ls · apply|create|delete|replace [--force] -f file.yaml (-f - opens the editor)
  Context          config set-context --current --namespace=NS · config get-contexts · version · cluster-info · api-resources
+ TLS / users      openssl genrsa|req|x509|verify · kubeadm certs check-expiration|renew · get csr · certificate approve|deny · create secret tls
+                  config set-credentials U --client-certificate=F --client-key=F --embed-certs=true · config use-context · --context=NAME · auth whoami
  Nodes (ssh)      ssh controlplane | ssh node-1 · systemctl status|start|stop|restart kubelet · journalctl -u kubelet · crictl ps · exit
  Cluster ops      (on controlplane) etcdctl snapshot save|status|restore ... · kubeadm upgrade plan|apply vX · kubeadm token create --print-join-command
                   (on nodes) apt-get install -y kubeadm=1.31.0-1.1 kubelet=1.31.0-1.1 · kubeadm upgrade node · systemctl restart kubelet
@@ -3048,16 +3185,201 @@ function cpFiles() {
   return { '/etc/kubernetes/manifests/etcd.yaml':etcdManifest(S.etcdDataDir), '/etc/kubernetes/manifests/kube-apiserver.yaml':comp('kube-apiserver'),
     '/etc/kubernetes/manifests/kube-controller-manager.yaml':comp('kube-controller-manager'), '/etc/kubernetes/manifests/kube-scheduler.yaml':comp('kube-scheduler'),
     '/etc/kubernetes/admin.conf':'apiVersion: v1\nkind: Config\nclusters:\n- cluster:\n    server: https://192.168.49.2:6443\n  name: kubernetes\n',
-    '/etc/kubernetes/pki/etcd/ca.crt':'-----BEGIN CERTIFICATE-----…', '/etc/kubernetes/pki/etcd/server.crt':'-----BEGIN CERTIFICATE-----…', '/etc/kubernetes/pki/etcd/server.key':'-----BEGIN RSA PRIVATE KEY-----…' };
+    ...pkiFiles() };
 }
 function kubeletConfig(ca = '/etc/kubernetes/pki/ca.crt') {
   return `apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nauthentication:\n  x509:\n    clientCAFile: ${ca}\ncgroupDriver: systemd\nclusterDNS:\n- 10.96.0.10\nclusterDomain: cluster.local\nstaticPodPath: /etc/kubernetes/manifests\n`;
 }
 function nodeFiles(name) {
-  return { '/var/lib/kubelet/config.yaml':kubeletConfig(), '/etc/kubernetes/kubelet.conf':'apiVersion: v1\nkind: Config\n# kubelet client credentials\n', '/etc/kubernetes/pki/ca.crt':'-----BEGIN CERTIFICATE-----…' };
+  return { '/var/lib/kubelet/config.yaml':kubeletConfig(), '/etc/kubernetes/kubelet.conf':'apiVersion: v1\nkind: Config\n# kubelet client credentials\n', '/etc/kubernetes/pki/ca.crt':certPem('ca'),
+    '/var/lib/kubelet/pki/kubelet-client-current.pem':issueCert({ subj:[['O', 'system:nodes'], ['CN', 'system:node:' + name]], keyId:pkiKey('kubelet-' + name), ca:'ca', use:'client', nb:pki().born, days:365 }) };
+}
+
+/* ---- PKI: certificates, keys and CSRs are PEM files whose payload encodes their metadata ---- */
+const DAY = 864e5;
+function pemWrap(type, obj) {
+  const json = JSON.stringify(obj);
+  let noise = '', h = json;
+  while (noise.length < 420) { h = hashStr(h); noise += h; }
+  return `-----BEGIN ${type}-----\n${(b64(json + '\n' + noise).match(/.{1,64}/g) || []).join('\n')}\n-----END ${type}-----\n`;
+}
+/** Parse the first PEM block of a file: { type, obj } or null. */
+function unpem(text) {
+  const m = String(text || '').match(/-----BEGIN ([A-Z ]+)-----\s*([\s\S]*?)-----END \1-----/);
+  if (!m) return null;
+  try { return { type:m[1], obj:JSON.parse(unb64(m[2].replace(/\s+/g, '')).split('\n')[0]) }; } catch { return null; }
+}
+const keyPem = (id, bits = 2048) => pemWrap('PRIVATE KEY', { t:'key', id, bits });
+const pki = () => S.pki || (S.pki = { born:S.t0 - 2 * DAY, served:S.t0 - 2 * DAY, ids:{}, issued:{} });
+const pkiKey = name => pki().ids[name] || (pki().ids[name] = rand(16, '0123456789abcdef'));
+const CERT_CAS = { ca:{ file:'ca', cn:'kubernetes' }, 'etcd-ca':{ file:'etcd/ca', cn:'etcd-ca' }, 'front-proxy-ca':{ file:'front-proxy-ca', cn:'front-proxy-ca' } };
+const ETCD_SANS = ['DNS:controlplane', 'DNS:localhost', 'IP Address:192.168.49.2', 'IP Address:127.0.0.1'];
+const CERT_LEAVES = {
+  apiserver:{ file:'apiserver', cn:'kube-apiserver', ca:'ca', use:'server', what:'serving the Kubernetes API',
+    sans:['DNS:controlplane', 'DNS:kubernetes', 'DNS:kubernetes.default', 'DNS:kubernetes.default.svc', 'DNS:kubernetes.default.svc.cluster.local', 'IP Address:10.96.0.1', 'IP Address:192.168.49.2'] },
+  'apiserver-etcd-client':{ file:'apiserver-etcd-client', cn:'kube-apiserver-etcd-client', ca:'etcd-ca', use:'client', what:'the apiserver to access etcd' },
+  'apiserver-kubelet-client':{ file:'apiserver-kubelet-client', cn:'kube-apiserver-kubelet-client', o:['kubeadm:cluster-admins'], ca:'ca', use:'client', what:'the API server to connect to kubelet' },
+  'front-proxy-client':{ file:'front-proxy-client', cn:'front-proxy-client', ca:'front-proxy-ca', use:'client', what:'the front proxy client' },
+  'etcd-healthcheck-client':{ file:'etcd/healthcheck-client', cn:'kube-etcd-healthcheck-client', ca:'etcd-ca', use:'client', what:'liveness probes to healthcheck etcd' },
+  'etcd-peer':{ file:'etcd/peer', cn:'controlplane', ca:'etcd-ca', use:'both', sans:ETCD_SANS, what:'etcd nodes to communicate with each other' },
+  'etcd-server':{ file:'etcd/server', cn:'controlplane', ca:'etcd-ca', use:'both', sans:ETCD_SANS, what:'serving etcd' },
+};
+const KUBECONFIG_CERTS = { 'admin.conf':'kubernetes-admin', 'controller-manager.conf':'system:kube-controller-manager', 'scheduler.conf':'system:kube-scheduler', 'super-admin.conf':'kubernetes-super-admin' };
+const issuedOf = name => pki().issued[name] ?? pki().born;
+const certDays = name => CERT_CAS[name] ? 3650 : 365;
+const expiryOf = name => issuedOf(name) + certDays(name) * DAY;
+function issueCert({ subj, keyId, ca, issuer, issuerKey, use = 'client', sans = [], days = 365, nb = now(), isCA = false }) {
+  const parent = ca ? CERT_CAS[ca] : null;
+  return pemWrap('CERTIFICATE', { t:'crt', subj, keyId, issuer:issuer || [['CN', parent.cn]], issuerKey:issuerKey || pkiKey(ca), serial:parseInt(hashStr(keyId + nb).slice(0, 6), 36),
+    nb, na:nb + days * DAY, use, sans, ca:isCA });
+}
+function certPem(name) {
+  const c = CERT_CAS[name];
+  if (c) return issueCert({ subj:[['CN', c.cn]], keyId:pkiKey(name), issuer:[['CN', c.cn]], issuerKey:pkiKey(name), use:'ca', days:3650, nb:issuedOf(name), isCA:true });
+  const l = CERT_LEAVES[name];
+  return issueCert({ subj:[...(l.o || []).map(o => ['O', o]), ['CN', l.cn]], keyId:pkiKey(name), ca:l.ca, use:l.use, sans:l.sans, nb:issuedOf(name), days:365 });
+}
+function pkiFiles() {
+  const out = {}, P = '/etc/kubernetes/pki/';
+  for (const [n, c] of [...Object.entries(CERT_CAS), ...Object.entries(CERT_LEAVES)]) { out[P + c.file + '.crt'] = certPem(n); out[P + c.file + '.key'] = keyPem(pkiKey(n)); }
+  out[P + 'sa.key'] = keyPem(pkiKey('sa'));
+  out[P + 'sa.pub'] = '-----BEGIN PUBLIC KEY-----\n' + b64(pkiKey('sa') + hashStr(pkiKey('sa'))).padEnd(64, 'A') + '\n-----END PUBLIC KEY-----\n';
+  return out;
+}
+const dnStr = subj => subj.map(([k, v]) => `${k} = ${v}`).join(', ');
+const subjCN = subj => (subj.find(([k]) => k === 'CN') || [])[1] || '';
+const subjO = subj => subj.filter(([k]) => k === 'O').map(([, v]) => v);
+const osslDate = t => { const d = new Date(t); return `${d.toLocaleString('en-US', { month:'short', timeZone:'UTC' })} ${String(d.getUTCDate()).padStart(2)} ${d.toISOString().slice(11, 19)} ${d.getUTCFullYear()} GMT`; };
+const kubeadmDate = t => { const d = new Date(t); return `${d.toLocaleString('en-US', { month:'short', timeZone:'UTC' })} ${String(d.getUTCDate()).padStart(2, '0')}, ${d.getUTCFullYear()} ${d.toISOString().slice(11, 16)} UTC`; };
+function residual(t) {
+  const ms = t - now();
+  if (ms <= 0) return '<invalid>';
+  const d = Math.floor(ms / DAY);
+  return d >= 365 ? Math.floor(d / 365) + 'y' : d >= 1 ? d + 'd' : Math.max(1, Math.floor(ms / 36e5)) + 'h';
+}
+const modulus = id => { let s = '', h = id; while (s.length < 64) { h = hashStr(h); s += h; } return [...s.slice(0, 64)].map(c => (c.charCodeAt(0) % 16).toString(16)).join('').toUpperCase(); };
+function parseSubj(s) {
+  const out = String(s || '').split('/').filter(Boolean).map(p => { const i = p.indexOf('='); return i > 0 ? [p.slice(0, i).trim(), p.slice(i + 1).trim()] : null; });
+  return out.length && out.every(Boolean) ? out : null;
+}
+const parseSans = ext => { const m = String(ext || '').match(/subjectAltName\s*=\s*(.*)/); return m ? m[1].split(',').map(x => x.trim().replace(/^IP:/, 'IP Address:')) : []; };
+function x509Text(c) {
+  const eku = { server:'TLS Web Server Authentication', client:'TLS Web Client Authentication', both:'TLS Web Server Authentication, TLS Web Client Authentication' }[c.use];
+  return `Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number: ${c.serial} (0x${c.serial.toString(16)})
+        Signature Algorithm: sha256WithRSAEncryption
+        Issuer: ${dnStr(c.issuer)}
+        Validity
+            Not Before: ${osslDate(c.nb)}
+            Not After : ${osslDate(c.na)}
+        Subject: ${dnStr(c.subj)}
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (2048 bit)
+                Modulus: ${modulus(c.keyId).slice(0, 24).toLowerCase().match(/../g).join(':')}:...
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Key Usage: critical
+                ${c.ca ? 'Digital Signature, Key Encipherment, Certificate Sign' : 'Digital Signature, Key Encipherment'}${eku ? `
+            X509v3 Extended Key Usage:
+                ${eku}` : ''}
+            X509v3 Basic Constraints: critical
+                CA:${c.ca ? 'TRUE' : 'FALSE'}
+            X509v3 Authority Key Identifier:
+                ${c.issuerKey.toUpperCase().match(/../g).join(':')}${c.sans.length ? `
+            X509v3 Subject Alternative Name:
+                ${c.sans.join(', ')}` : ''}
+    Signature Algorithm: sha256WithRSAEncryption`;
+}
+const csrText = r => `Certificate Request:
+    Data:
+        Version: 1 (0x0)
+        Subject: ${dnStr(r.subj)}
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (2048 bit)
+        Attributes:${r.sans.length ? `
+            Requested Extensions:
+                X509v3 Subject Alternative Name:
+                    ${r.sans.join(', ')}` : `
+            (none)`}
+    Signature Algorithm: sha256WithRSAEncryption`;
+/** Load a PEM file of the expected type (printing openssl-style errors). */
+function loadPem(path, types, cmd = 'openssl') {
+  if (!path || path === true) { err(`${cmd}: missing file argument`); return null; }
+  const t = fsOf()[resolvePath(path)];
+  if (t === undefined) { err(`Could not open file or uri for loading from ${path}\n${cmd}: No such file or directory`); return null; }
+  const p = unpem(t);
+  if (!p || !types.includes(p.type)) { err(`Could not read ${types[0] === 'PRIVATE KEY' ? 'private key' : types[0] === 'CERTIFICATE' ? 'certificate' : 'certificate request'} from ${path}\nUnable to load ${types[0] === 'CERTIFICATE' ? 'certificate' : 'object'}: expected PEM type ${types[0]}`); return null; }
+  return p.obj;
+}
+function writeOut(path, text) {
+  const p = resolvePath(path);
+  if (!isDir(parentOf(p))) { err(`Can't open "${path}" for writing, No such file or directory`); return false; }
+  writeFile(p, text);
+  return true;
+}
+/** Renew kubeadm-managed leaf certificates (and kubeconfig client certs) on the control plane. */
+function renewCerts(names) {
+  const k = pki();
+  for (const n of names) k.issued[n] = now();
+  if (S.fs.controlplane) Object.assign(S.fs.controlplane, pkiFiles());
+}
+/** What a client sees when it dials the API server, or null if TLS + TCP are fine. */
+function apiserverDown() {
+  const cp = S.fs.controlplane;
+  if (cp && !cp['/etc/kubernetes/manifests/kube-apiserver.yaml']) return { msg:'The connection to the server 192.168.49.2:6443 was refused - did you specify the right host or port?', why:'connection refused: the kube-apiserver static pod is not running (its manifest is missing from /etc/kubernetes/manifests).' };
+  const na = pki().served + 365 * DAY;
+  if (now() > na) return { msg:`Unable to connect to the server: tls: failed to verify certificate: x509: certificate has expired or is not yet valid: current time ${new Date().toISOString().slice(0, 19)}Z is after ${new Date(na).toISOString().slice(0, 19)}Z`,
+    why:`the TLS handshake fails: the API server presents a <b>serving certificate that expired</b> on ${new Date(na).toUTCString()}. Renew it on the control plane (<code>kubeadm certs renew apiserver</code>) and restart kube-apiserver.` };
+  return null;
+}
+/** kubeconfig model → YAML (what ~/.kube/config contains). */
+function kubeconfigText(raw) {
+  const K = S.kcfg, D = v => raw ? b64(v) : 'DATA+OMITTED';
+  K.contexts[K.current].ns = S.ctxNs;
+  const adminCert = issueCert({ subj:[['O', 'kubeadm:cluster-admins'], ['CN', 'kubernetes-admin']], keyId:pkiKey('admin.conf'), ca:'ca', nb:issuedOf('admin.conf') });
+  return `apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority-data: ${D(certPem('ca'))}
+    server: https://192.168.49.2:6443
+  name: kubernetes
+contexts:
+${Object.entries(K.contexts).map(([n, c]) => `- context:\n    cluster: ${c.cluster}\n${c.ns && c.ns !== 'default' ? `    namespace: ${c.ns}\n` : ''}    user: ${c.user}\n  name: ${n}`).join('\n')}
+current-context: ${K.current}
+kind: Config
+preferences: {}
+users:
+${Object.entries(K.users).map(([n, u]) => `- name: ${n}\n  user:\n` + (u.admin ? `    client-certificate-data: ${D(adminCert)}\n    client-key-data: ${D(keyPem(pkiKey('admin.conf')))}`
+    : u.certPath ? `    client-certificate: ${u.certPath}\n    client-key: ${u.keyPath}` : `    client-certificate-data: ${D(u.cert)}\n    client-key-data: ${D(u.key)}`)).join('\n')}
+`;
+}
+const saveKubeconfig = () => { if (S.fs.workstation) writeFile('/home/student/.kube/config', kubeconfigText(true), 'workstation'); };
+/** Who the API server thinks you are, from --as or the kubeconfig context's client certificate. */
+function kubeIdentity(flags) {
+  if (typeof flags.as === 'string') return { user:flags.as, groups:[], via:'impersonation (<code>--as</code>)' };
+  const K = S.kcfg, name = typeof flags.context === 'string' ? flags.context : K.current, ctx = K.contexts[name];
+  if (!ctx) return { error:`error: context "${name}" does not exist` };
+  const u = K.users[ctx.user];
+  if (!u) return { error:`error: user "${ctx.user}" referenced by context "${name}" does not exist in kubeconfig\nHint: kubectl config set-credentials ${ctx.user} --client-certificate=… --client-key=…` };
+  if (u.admin) return { user:ADMIN.user, groups:ADMIN.groups, admin:true };
+  const ws = fsOf(u.host || 'workstation'), certTxt = u.certPath ? ws[u.certPath] : u.cert, keyTxt = u.keyPath ? ws[u.keyPath] : u.key;
+  if (certTxt === undefined) return { error:`error: unable to read client-cert ${u.certPath} for ${ctx.user} due to open ${u.certPath}: no such file or directory` };
+  if (keyTxt === undefined) return { error:`error: unable to read client-key ${u.keyPath} for ${ctx.user} due to open ${u.keyPath}: no such file or directory` };
+  const c = unpem(certTxt), k = unpem(keyTxt);
+  if (!c || c.type !== 'CERTIFICATE') return { error:'error: tls: failed to find any PEM data in certificate input' };
+  if (!k || k.type !== 'PRIVATE KEY') return { error:'error: tls: failed to find any PEM data in key input' };
+  if (k.obj.id !== c.obj.keyId) return { error:'error: tls: private key does not match public key' };
+  const cn = subjCN(c.obj.subj), groups = subjO(c.obj.subj);
+  if (c.obj.issuerKey !== pkiKey('ca')) return { unauthorized:true, why:`it was not signed by the cluster CA (issuer: ${esc(dnStr(c.obj.issuer))})` };
+  if (now() > c.obj.na) return { unauthorized:true, why:'it has expired' };
+  return { user:cn, groups, cert:true, via:`client certificate <b>CN=${esc(cn)}</b>${groups.length ? ` <b>O=${esc(groups.join(','))}</b>` : ''} (signed by the cluster CA)` };
 }
 /** Everything etcd stores (what a snapshot captures). */
-const STORED = ['pods','deployments','replicasets','services','namespaces','configmaps','secrets','netpols','pvs','pvcs','serviceaccounts','roles','rolebindings','clusterroles','clusterrolebindings','storageclasses'];
+const STORED = ['pods','deployments','replicasets','services','namespaces','configmaps','secrets','netpols','pvs','pvcs','serviceaccounts','roles','rolebindings','clusterroles','clusterrolebindings','storageclasses','csrs'];
 function snapshotState() {
   const snap = { at:now(), rev:S.history.length * 7 + S.events.length + 1000 };
   for (const k of STORED) snap[k] = clone(S[k]);
@@ -3065,7 +3387,7 @@ function snapshotState() {
   return snap;
 }
 function loadState(snap) {
-  for (const k of STORED) S[k] = snap ? clone(snap[k]) : (k === 'namespaces' ? freshState().namespaces : k === 'clusterroles' || k === 'clusterrolebindings' || k === 'storageclasses' || k === 'serviceaccounts' ? freshState()[k] : []);
+  for (const k of STORED) S[k] = snap ? clone(snap[k] || []) : (k === 'namespaces' ? freshState().namespaces : k === 'clusterroles' || k === 'clusterrolebindings' || k === 'storageclasses' || k === 'serviceaccounts' ? freshState()[k] : []);
   S.pods = S.pods.filter(p => !p.nodeName || findNode(p.nodeName));
   for (const n of (snap && snap.nodes) || []) { const live = findNode(n.name); if (live) Object.assign(live, { labels:n.labels, taints:n.taints, unschedulable:n.unschedulable }); }
   S.services.forEach(s => s.epSig = null);
@@ -3150,10 +3472,27 @@ const SHELL = {
     if (sub === 'token' && args[1] === 'create') return print(`kubeadm join 192.168.49.2:6443 --token ${rand(6, 'abcdefghijklmnopqrstuvwxyz0123456789')}.${rand(16, 'abcdefghijklmnopqrstuvwxyz0123456789')} --discovery-token-ca-cert-hash sha256:${rand(64, '0123456789abcdef')}`);
     if (sub === 'certs' && args[1] === 'check-expiration') {
       if (!cp) return err('error: run this on the control plane node');
-      const exp = new Date(S.t0 + 364 * 864e5).toUTCString().slice(5, 22);
-      return print(table([['CERTIFICATE','EXPIRES','RESIDUAL TIME','CERTIFICATE AUTHORITY','EXTERNALLY MANAGED'], ...['admin.conf','apiserver','apiserver-etcd-client','apiserver-kubelet-client','controller-manager.conf','etcd-healthcheck-client','etcd-peer','etcd-server','front-proxy-client','scheduler.conf','super-admin.conf'].map(c => [c, exp, '364d', /etcd/.test(c) ? 'etcd-ca' : /front/.test(c) ? 'front-proxy-ca' : 'ca', 'no'])]));
+      S.stats.checkExp = (S.stats.checkExp || 0) + 1;
+      const row = (n, ca) => [n, kubeadmDate(expiryOf(n)), residual(expiryOf(n)), ca, 'no'];
+      const leaves = [...Object.keys(KUBECONFIG_CERTS), ...Object.keys(CERT_LEAVES)].sort().map(n => row(n, CERT_LEAVES[n] ? CERT_LEAVES[n].ca : 'ca'));
+      const expired = leaves.filter(r => r[2] === '<invalid>').map(r => r[0]);
+      return print(`[check-expiration] Reading configuration from the cluster...\n[check-expiration] FYI: You can look at this config file with 'kubectl -n kube-system get cm kubeadm-config -o yaml'\n\n`
+        + table([['CERTIFICATE','EXPIRES','RESIDUAL TIME','CERTIFICATE AUTHORITY','EXTERNALLY MANAGED'], ...leaves]) + '\n\n'
+        + table([['CERTIFICATE AUTHORITY','EXPIRES','RESIDUAL TIME','EXTERNALLY MANAGED'], ...Object.keys(CERT_CAS).map(n => [n, kubeadmDate(expiryOf(n)), residual(expiryOf(n)), 'no'])])
+        + (expired.length ? `\n\n!MISSING or EXPIRED: ${expired.join(', ')} — renew with: kubeadm certs renew ${expired.length > 1 ? 'all' : expired[0]}` : ''), expired.length ? 'err' : '');
     }
-    if (sub !== 'upgrade') return err('kubeadm: supported here: version, upgrade plan|apply|node, token create --print-join-command, certs check-expiration');
+    if (sub === 'certs' && args[1] === 'renew') {
+      if (!cp) return err('error: run this on the control plane node');
+      const what = args[2], all = [...Object.keys(CERT_LEAVES), ...Object.keys(KUBECONFIG_CERTS)];
+      if (!what || (what !== 'all' && !all.includes(what))) return err(`error: missing or unknown certificate. Use one of: all, ${all.join(', ')}`);
+      const names = what === 'all' ? all : [what];
+      beginTrace(`kubeadm certs renew ${what}`);
+      await step(`<b>kubeadm</b> re-signs ${what === 'all' ? '<b>every</b> kubeadm-managed certificate' : `<b>${esc(what)}</b>`} with the <b>same CA and key</b>, valid for another year, and overwrites the files in <code>/etc/kubernetes/pki</code> (and the client certs inside <code>/etc/kubernetes/*.conf</code>). Running components still hold the <b>old</b> certificate in memory!`,
+        [], () => renewCerts(names));
+      S.stats.certRenewed = (S.stats.certRenewed || 0) + 1;
+      return print(`[renew] Reading configuration from the cluster...\n[renew] FYI: You can look at this config file with 'kubectl -n kube-system get cm kubeadm-config -o yaml'\n\n${names.map(n => CERT_LEAVES[n] ? `certificate for ${CERT_LEAVES[n].what} renewed` : `certificate embedded in the kubeconfig file for ${n === 'admin.conf' ? 'the admin to use and for kubeadm itself' : n.replace('.conf', '').replace('-', ' ') + ' to use'} renewed`).join('\n')}\n\nDone renewing certificates. You must restart the kube-apiserver, kube-controller-manager, kube-scheduler and etcd, so that they can use the new certificates.`, 'ok');
+    }
+    if (sub !== 'upgrade') return err('kubeadm: supported here: version, upgrade plan|apply|node, token create --print-join-command, certs check-expiration, certs renew all|NAME');
     const op = args[1];
     if (op === 'plan') {
       if (!cp) return err('[upgrade/config] FATAL: this command must be run on a control-plane node');
@@ -3172,7 +3511,7 @@ const SHELL = {
       await step(`<b>kubeadm</b> backs up the static pod manifests and etcd, then rewrites <code>/etc/kubernetes/manifests/*.yaml</code> with ${v} images. The kubelet on the control plane restarts each static pod: <b>etcd → kube-apiserver → controller-manager → scheduler</b>.`,
         [['etcd','etcd',C.write], ['api','etcd',C.write], ['cm','api',C.req], ['sched','api',C.req]]);
       await step(`Control plane now runs <b>${v}</b>. Next: CoreDNS & kube-proxy addons are upgraded. <b>Worker kubelets are NOT upgraded</b> — do each node: drain → ssh → apt-get install kubeadm, <code>kubeadm upgrade node</code>, apt-get install kubelet → <code>systemctl restart kubelet</code> → uncordon.`,
-        [['api','dns',C.write]], () => { S.cpVersion = v; Object.assign(fsOf('controlplane'), cpFiles()); });
+        [['api','dns',C.write]], () => { S.cpVersion = v; renewCerts([...Object.keys(CERT_LEAVES), ...Object.keys(KUBECONFIG_CERTS)]); Object.assign(fsOf('controlplane'), cpFiles()); });
       return print(`[upgrade/staticpods] Writing new Static Pod manifests to "/etc/kubernetes/tmp/kubeadm-upgraded-manifests"\n[upgrade/staticpods] Moved new manifest to "/etc/kubernetes/manifests/kube-apiserver.yaml"\n[upgrade/staticpods] Moved new manifest to "/etc/kubernetes/manifests/kube-controller-manager.yaml"\n[upgrade/staticpods] Moved new manifest to "/etc/kubernetes/manifests/kube-scheduler.yaml"\n[addons] Applied essential addon: CoreDNS\n[addons] Applied essential addon: kube-proxy\n\n[upgrade/successful] SUCCESS! Your cluster was upgraded to "${v}". Enjoy!\n\n[upgrade/kubelet] Now that your control plane is upgraded, please proceed with upgrading your kubelets if you haven't already done so.`, 'ok');
     }
     if (op === 'node') {
@@ -3414,7 +3753,94 @@ const SHELL = {
   async whoami() { print(S.shell ? 'root' : 'student'); },
   async hostname() { print(S.shell || 'cka-lab'); },
   async curl(args) { return curlCmd(args.filter(a => !a.startsWith('-'))); },
-  async base64(args) { print('(use with a pipe, e.g.  … | base64 -d)', 'info'); },
+  async base64(argv) {
+    const { f, o, args } = unixArgs(argv, ['w']);
+    const text = args.length ? readText(args[0], 'base64') : STDIN;
+    if (text == null) return args.length ? undefined : err('base64: missing input (pass a file or pipe something in)');
+    print(pipeFilter(text.replace(/\n$/, '').split('\n'), ['base64', ...(f.has('d') ? ['-d'] : []), ...(o.w !== undefined ? ['-w', o.w] : [])]).join('\n'));
+  },
+  async openssl(argv) {
+    const [sub, ...a] = argv, opt = n => { const i = a.indexOf('-' + n); return i >= 0 && a[i + 1] !== undefined ? a[i + 1] : undefined; }, has = n => a.includes('-' + n);
+    const hex = () => rand(16, '0123456789abcdef');
+    if (!sub || sub === 'help') return print('Standard commands supported here:\n  genrsa   genpkey   req   x509   verify   rsa   version\n\nExamples:\n  openssl genrsa -out jane.key 2048\n  openssl req -new -key jane.key -subj "/CN=jane/O=dev" -out jane.csr\n  openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -text\n  openssl x509 -req -in jane.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out jane.crt -days 30\n  openssl req -x509 -newkey rsa:2048 -nodes -keyout tls.key -out tls.crt -days 365 -subj "/CN=web.example.com"');
+    if (sub === 'version') return print('OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)');
+    if (sub === 'genrsa' || sub === 'genpkey') {
+      const bits = +(a.find(x => /^\d{3,5}$/.test(x)) || (opt('pkeyopt') || '').split(':')[1] || 2048), key = keyPem(hex(), bits), out = opt('out');
+      if (out) return void writeOut(out, key);
+      return print(key.replace(/\n$/, ''));
+    }
+    if (sub === 'rsa' || sub === 'pkey') {
+      const k = loadPem(opt('in'), ['PRIVATE KEY']); if (!k) return;
+      if (has('modulus')) return print('Modulus=' + modulus(k.id));
+      if (has('check')) return print('RSA key ok');
+      if (has('pubout')) return print('-----BEGIN PUBLIC KEY-----\n' + b64(k.id + hashStr(k.id)).padEnd(64, 'A') + '\n-----END PUBLIC KEY-----');
+      return print(fsOf()[resolvePath(opt('in'))].replace(/\n$/, ''));
+    }
+    if (sub === 'req') {
+      if (opt('in') && !has('x509')) {
+        const r = loadPem(opt('in'), ['CERTIFICATE REQUEST']); if (!r) return;
+        const out = [];
+        if (has('text')) out.push(csrText(r));
+        if (has('subject')) out.push('subject=' + dnStr(r.subj));
+        if (has('verify')) out.push('Certificate request self-signature verify OK');
+        if (!has('noout')) out.push(fsOf()[resolvePath(opt('in'))].replace(/\n$/, ''));
+        return out.length && print(out.join('\n'));
+      }
+      const subj = parseSubj(opt('subj'));
+      if (!subj) return err(opt('subj') ? `req: Can't parse subject "${opt('subj')}" — use "/CN=name/O=group"` : 'req: interactive prompts are not supported in this lab — pass the subject: -subj "/CN=jane/O=dev"');
+      let keyId;
+      if (opt('newkey') || !opt('key')) {
+        keyId = hex();
+        const ko = opt('keyout') || 'privkey.pem';
+        if (!writeOut(ko, keyPem(keyId, +((opt('newkey') || 'rsa:2048').split(':')[1]) || 2048))) return;
+        print('.....+++++\n.........+++++\n-----', 'info');
+      } else { const k = loadPem(opt('key'), ['PRIVATE KEY']); if (!k) return; keyId = k.id; }
+      const sans = parseSans(opt('addext'));
+      const text = has('x509')
+        ? issueCert({ subj, keyId, issuer:subj, issuerKey:keyId, use:'server', sans, days:+(opt('days') || 30) })
+        : pemWrap('CERTIFICATE REQUEST', { t:'csr', subj, keyId, sans });
+      if (opt('out')) return void writeOut(opt('out'), text);
+      return print(text.replace(/\n$/, ''));
+    }
+    if (sub === 'x509') {
+      if (has('req')) {
+        const r = loadPem(opt('in'), ['CERTIFICATE REQUEST']); if (!r) return;
+        const ca = loadPem(opt('CA'), ['CERTIFICATE']); if (!ca) return;
+        const ck = loadPem(opt('CAkey'), ['PRIVATE KEY']); if (!ck) return;
+        if (ck.id !== ca.keyId) return err('40C7A1F2E87F0000:error:05800074:x509 certificate routines:X509_check_private_key:key values mismatch\nThe -CAkey does not belong to the -CA certificate.');
+        const cert = issueCert({ subj:r.subj, keyId:r.keyId, issuer:ca.subj, issuerKey:ca.keyId, use:'client', sans:r.sans, days:+(opt('days') || 30) });
+        if (has('CAcreateserial')) writeFile(resolvePath(opt('CA')).replace(/\.[^./]+$/, '') + '.srl', hashStr(cert).toUpperCase() + '\n');
+        print(`Certificate request self-signature ok\nsubject=${dnStr(r.subj)}`);
+        if (opt('out')) return void writeOut(opt('out'), cert);
+        return print(cert.replace(/\n$/, ''));
+      }
+      const src = opt('in');
+      const c = src ? loadPem(src, ['CERTIFICATE']) : (unpem(STDIN || '') || {}).obj;
+      if (!c) return src ? undefined : err('Could not read certificate from <stdin>\nUnable to load certificate');
+      if (src && resolvePath(src).startsWith('/etc/kubernetes/pki/')) S.stats.x509Read = (S.stats.x509Read || 0) + 1;
+      const out = [];
+      if (has('subject')) out.push('subject=' + dnStr(c.subj));
+      if (has('issuer')) out.push('issuer=' + dnStr(c.issuer));
+      if (has('serial')) out.push('serial=' + c.serial.toString(16).toUpperCase());
+      if (has('dates') || has('startdate')) out.push('notBefore=' + osslDate(c.nb));
+      if (has('dates') || has('enddate')) out.push('notAfter=' + osslDate(c.na));
+      if (has('modulus')) out.push('Modulus=' + modulus(c.keyId));
+      if (opt('ext')) out.push(/subjectAltName/.test(opt('ext')) ? (c.sans.length ? `X509v3 Subject Alternative Name: \n    ${c.sans.join(', ')}` : 'No extensions matched with -ext subjectAltName') : `(extension ${opt('ext')} not shown in this simulator)`);
+      if (has('text')) out.push(x509Text(c));
+      if (opt('checkend') !== undefined) { const ok = c.na > now() + +opt('checkend') * 1000; out.push(ok ? 'Certificate will not expire' : 'Certificate will expire'); }
+      if (!has('noout')) out.push((src ? fsOf()[resolvePath(src)] : STDIN).replace(/\n$/, ''));
+      return out.length && print(out.join('\n'));
+    }
+    if (sub === 'verify') {
+      const ca = loadPem(opt('CAfile'), ['CERTIFICATE']); if (!ca) return;
+      const file = a.filter(x => !x.startsWith('-') && x !== opt('CAfile')).pop();
+      const c = loadPem(file, ['CERTIFICATE']); if (!c) return;
+      if (c.issuerKey !== ca.keyId) return err(`${dnStr(c.subj).replace(/ = /g, '=')}\nerror 20 at 0 depth lookup: unable to get local issuer certificate\nerror ${file}: verification failed`);
+      if (now() > c.na) return err(`${dnStr(c.subj).replace(/ = /g, '=')}\nerror 10 at 0 depth lookup: certificate has expired\nerror ${file}: verification failed`);
+      return print(`${file}: OK`, 'ok');
+    }
+    err(`Invalid command '${sub}'; type "openssl help" for a list.`);
+  },
 };
 async function editFile(p) {
   if (!p) return err('vi: missing file name');
@@ -3537,14 +3963,31 @@ function pipeFilter(lines, seg) {
   if (c === 'head') return lines.slice(0, nArg());
   if (c === 'tail') return lines.slice(-nArg());
   if (c === 'wc') return [String(a.includes('-l') ? lines.length : a.includes('-c') ? lines.join('\n').length + 1 : lines.join(' ').split(/\s+/).filter(Boolean).length)];
-  if (c === 'base64') { const s = lines.join('\n').trim(); try { return [a.some(x => /^-(d|-decode)$/.test(x)) ? unb64(s) : b64(s)]; } catch { return ['base64: invalid input']; } }
+  if (c === 'base64') {
+    // GNU base64 wraps encoded output at 76 columns unless -w 0.
+    const dec = a.some(x => /^-(d|-decode)$/.test(x)), wi = a.findIndex(x => /^-w/.test(x)), w = wi < 0 ? 76 : +(a[wi].slice(2) || a[wi + 1] || 76);
+    const s = lines.join('\n');
+    try {
+      if (dec) return [unb64(s.replace(/\s+/g, ''))];
+      const enc = b64(s.replace(/\n$/, ''));
+      return w > 0 ? enc.match(new RegExp(`.{1,${w}}`, 'g')) || [''] : [enc];
+    } catch { return ['base64: invalid input']; }
+  }
+  if (c === 'tr') {
+    const unesc = s => String(s ?? '').replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\r/g, '\r');
+    const expand = s => unesc(s).replace(/(.)-(.)/g, (m, x, y) => { let r = ''; for (let i = x.charCodeAt(0); i <= y.charCodeAt(0); i++) r += String.fromCharCode(i); return r; });
+    const text = lines.join('\n');
+    if (a[0] === '-d') { const set = expand(a[1]); return [[...text].filter(ch => !set.includes(ch)).join('')]; }
+    const s1 = expand(a[0]), s2 = expand(a[1]);
+    return [[...text].map(ch => { const i = s1.indexOf(ch); return i < 0 || !s2 ? ch : s2[Math.min(i, s2.length - 1)]; }).join('')];
+  }
   if (c === 'sort') { const s = [...lines].sort(); return a.includes('-r') ? s.reverse() : s; }
   if (c === 'uniq') return lines.filter((l, i) => l !== lines[i - 1]);
   if (c === 'awk' && /\{print \$(\d+)\}/.test(a.join(' '))) { const k = +a.join(' ').match(/\$(\d+)/)[1]; return lines.map(l => l.trim().split(/\s+/)[k - 1] || ''); }
   return [...lines, `(${c}: not supported in this shell — supported filters: grep, head, tail, wc -l, sort, uniq, base64 -d, awk '{print $N}')`];
 }
 
-const PIPE_FILTERS = ['grep', 'egrep', 'head', 'tail', 'wc', 'base64', 'sort', 'uniq', 'awk'];
+const PIPE_FILTERS = ['grep', 'egrep', 'head', 'tail', 'wc', 'base64', 'sort', 'uniq', 'awk', 'tr'];
 // Text fed to the current command by a pipe, heredoc or "< file" (cat, grep, sed, tee, kubectl apply -f -).
 let STDIN = null;
 /** Runs one input; multi-line input (pastes) runs line by line, and "<<EOF … EOF" heredocs become stdin. */
@@ -3557,17 +4000,36 @@ async function exec(input) {
     if (!hd) { await execLine(line); continue; }
     const body = [];
     while (++i < lines.length && lines[i].trim() !== hd[2]) body.push(lines[i]);
-    await execLine(line.replace(hd[0], ' '), [line, ...body.map(l => '> ' + l), '> ' + hd[2]].join('\n'), body.join('\n') + '\n');
+    let stdin = body.join('\n') + '\n';
+    if (!hd[1]) stdin = expandVars(await cmdSubst(stdin));
+    await execLine(line.replace(hd[0], ' '), [line, ...body.map(l => '> ' + l), '> ' + hd[2]].join('\n'), stdin);
   }
+}
+const expandVars = s => s.replace(/\$\{?([A-Za-z_]\w*)\}?/g, (m, k) => S.env[k] ?? '');
+const tildeTok = t => typeof t === 'string' && /^~(\/|$)/.test(t) ? HOME() + t.slice(1) : t;
+/** Bash $(...) command substitution (no nesting): runs the inner pipeline and splices its stdout in. */
+async function cmdSubst(text) {
+  if (!text.includes('$(')) return text;
+  let out = '', last = 0;
+  for (const m of text.matchAll(/\$\(([^()]*)\)/g)) {
+    const prev = CAPTURE, prevIn = STDIN;
+    CAPTURE = []; STDIN = null;
+    let got;
+    try { await execPipeline(tokenize(expandVars(m[1])).map(tildeTok)); } finally { got = CAPTURE; CAPTURE = prev; STDIN = prevIn; }
+    got.filter(c => c.cls === 'err').forEach(c => print(c.text, 'err'));
+    out += text.slice(last, m.index) + got.filter(c => c.cls !== 'err').map(c => c.text).join('\n').replace(/\n+$/, '');
+    last = m.index + m[0].length;
+  }
+  return out + text.slice(last);
 }
 async function execLine(line, shown = line, stdin = null) {
   print(promptStr() + shown, 'in');
   S.history.push(line.trim());
-  const expanded = line.replace(/\$\{?([A-Za-z_]\w*)\}?/g, (m, k) => S.env[k] ?? '');
+  const expanded = expandVars(await cmdSubst(line));
   // "a && b" and "a ; b" run sequentially.
   const cmds = [[]];
   for (let t of tokenize(expanded)) {
-    if (typeof t === 'string' && /^~(\/|$)/.test(t)) t = HOME() + t.slice(1);
+    t = tildeTok(t);
     if (t === '&&' || t === ';') cmds.push([]); else cmds[cmds.length - 1].push(t);
   }
   for (const [i, c] of cmds.entries()) {
@@ -3651,19 +4113,33 @@ async function runSimple(toks) {
     const sugg = Object.keys(CMDS).filter(c => levenshtein(c, verb) <= 2);
     return print(`error: unknown command "${verb}" for "kubectl"${sugg.length ? `\n\nDid you mean this?\n\t${sugg.join('\n\t')}` : ''}\n\nRun 'kubectl --help' for usage.`, 'err');
   }
-  CMD_NS = typeof flags.namespace === 'string' ? flags.namespace : S.ctxNs;
+  const ctxOf = typeof flags.context === 'string' && S.kcfg.contexts[flags.context];
+  CMD_NS = typeof flags.namespace === 'string' ? flags.namespace : ctxOf ? (ctxOf.ns || 'default') : S.ctxNs;
   beginTrace('$ ' + toks.join(' '));
-  // Impersonation: --as=USER makes the API server evaluate RBAC for that user.
-  if (typeof flags.as === 'string' && verb !== 'auth') {
+  // Every API call: TLS to kube-apiserver, then authentication (client cert / --as), then RBAC.
+  let ident = { user:ADMIN.user, groups:ADMIN.groups, admin:true };
+  if (verb !== 'config') {
+    const down = apiserverDown();
+    if (down) { await step(`❌ kubectl dials <b>kube-apiserver</b> at https://192.168.49.2:6443 — ${down.why}`, [['kubectl','api',C.del]]); return err(down.msg); }
+    ident = kubeIdentity(flags);
+    if (ident.error) return err(ident.error);
+    if (ident.unauthorized) {
+      await step(`❌ TLS handshake OK, but the API server rejects the client certificate: ${ident.why} → <b>401 Unauthorized</b>.`, [['kubectl','api',C.req],['api','kubectl',C.del]]);
+      return err('error: You must be logged in to the server (Unauthorized)');
+    }
+  }
+  flags._ident = ident;
+  if (!ident.admin && verb !== 'auth') {
     const need = rbacNeed(verb, args.slice(1));
     if (need) {
-      const r = authorize(flags.as, need.verb, need.resource, CMD_NS);
+      const r = authorize(ident.user, need.verb, need.resource, CMD_NS, ident.groups);
       if (!r.allowed) {
-        await step(`<b>kubectl → kube-apiserver</b> (impersonating <b>${esc(flags.as)}</b>): authentication OK, then the <b>RBAC authorizer</b> looks for a Role/ClusterRole bound to ${esc(flags.as)} that allows <b>${need.verb}</b> on <b>${need.resource}</b> in ${CMD_NS}… none found.`, [['kubectl','api',C.req]]);
+        await step(`<b>kubectl → kube-apiserver</b>: authenticated as <b>${esc(ident.user)}</b> via ${ident.via}. Then the <b>RBAC authorizer</b> looks for a Role/ClusterRole bound to ${esc(ident.user)}${ident.groups.length ? ` or groups ${esc(ident.groups.join(', '))}` : ''} that allows <b>${need.verb}</b> on <b>${need.resource}</b> in ${CMD_NS}… none found.`, [['kubectl','api',C.req]]);
         return step(`❌ <b>403 Forbidden</b>. RBAC is deny-by-default: grant it with a Role + RoleBinding.`, [['api','kubectl',C.del]], () =>
-          print(`Error from server (Forbidden): ${NOUN(need.kind)} is forbidden: User "${flags.as}" cannot ${need.verb} resource "${need.resource}" in API group "${GROUP[need.kind] || ''}"${LIST[need.kind]?.cluster ? ' at the cluster scope' : ` in the namespace "${CMD_NS}"`}`, 'err'));
+          print(`Error from server (Forbidden): ${NOUN(need.kind)} is forbidden: User "${ident.user}" cannot ${need.verb} resource "${need.resource}" in API group "${GROUP[need.kind] || ''}"${LIST[need.kind]?.cluster ? ' at the cluster scope' : ` in the namespace "${CMD_NS}"`}`, 'err'));
       }
-      addStepLi(`🔐 RBAC: <b>${esc(flags.as)}</b> may <b>${need.verb}</b> ${need.resource} — allowed by ${esc(r.reason)}.`, '');
+      if (ident.cert) S.stats.certUserOk = (S.stats.certUserOk || 0) + 1;
+      addStepLi(`🔐 Authenticated as <b>${esc(ident.user)}</b> via ${ident.via} → RBAC: may <b>${need.verb}</b> ${need.resource} — allowed by ${esc(r.reason)}.`, '');
     }
   }
   await CMDS[verb](args.slice(1), flags);
@@ -3710,7 +4186,7 @@ function completions(prev, cur) {
   const verbs = Object.keys(CMDS);
   if (cur.startsWith('--namespace=')) return S.namespaces.map(n => '--namespace=' + n.name);
   if (cur.startsWith('--type=')) return ['--type=ClusterIP','--type=NodePort','--type=LoadBalancer'];
-  if (cur.startsWith('-')) return ['--image=','--replicas=','--port=','--target-port=','--type=','--dry-run=client','--from-literal=','--verb=','--resource=','--role=','--clusterrole=','--user=','--serviceaccount=','--as=','--namespace=','--all-namespaces','--show-labels','--selector=','--overwrite','--force','--grace-period=0','--ignore-daemonsets','--tail=','--all','--current','--sort-by=','--cacert=/etc/kubernetes/pki/etcd/ca.crt','--cert=/etc/kubernetes/pki/etcd/server.crt','--key=/etc/kubernetes/pki/etcd/server.key','--endpoints=https://127.0.0.1:2379','--data-dir=','-o','-n','-A','-f','-l'];
+  if (cur.startsWith('-') && prev[0] !== 'openssl') return ['--image=','--replicas=','--port=','--target-port=','--type=','--dry-run=client','--from-literal=','--verb=','--resource=','--role=','--clusterrole=','--user=','--serviceaccount=','--as=','--namespace=','--all-namespaces','--show-labels','--selector=','--overwrite','--force','--grace-period=0','--ignore-daemonsets','--tail=','--all','--current','--sort-by=','--cacert=/etc/kubernetes/pki/etcd/ca.crt','--cert=/etc/kubernetes/pki/etcd/server.crt','--key=/etc/kubernetes/pki/etcd/server.key','--endpoints=https://127.0.0.1:2379','--data-dir=','-o','-n','-A','-f','-l'];
   if (!prev.length) return ['kubectl','help','clear', ...Object.keys(SHELL), ...verbs];
   const last = prev[prev.length - 1];
   if (last === '-n' || last === '--namespace') return S.namespaces.map(n => n.name);
@@ -3720,7 +4196,8 @@ function completions(prev, cur) {
   if (prev[0] === 'systemctl') return prev.length === 1 ? ['status','start','stop','restart','enable','daemon-reload'] : ['kubelet','containerd'];
   if (prev[0] === 'journalctl') return ['-u','kubelet'];
   if (prev[0] === 'crictl') return ['ps','pods','images'];
-  if (prev[0] === 'kubeadm') return prev.length === 1 ? ['upgrade','token','certs','version'] : prev[1] === 'upgrade' ? ['plan','apply','node', nextMinor(S.cpVersion)] : prev[1] === 'token' ? ['create','--print-join-command'] : ['check-expiration'];
+  if (prev[0] === 'kubeadm') return prev.length === 1 ? ['upgrade','token','certs','version'] : prev[1] === 'upgrade' ? ['plan','apply','node', nextMinor(S.cpVersion)] : prev[1] === 'token' ? ['create','--print-join-command'] : prev.length === 2 ? ['check-expiration','renew'] : ['all', ...Object.keys(CERT_LEAVES), ...Object.keys(KUBECONFIG_CERTS)];
+  if (prev[0] === 'openssl') return prev.length === 1 ? ['genrsa','req','x509','verify','rsa','version'] : ['-in','-out','-key','-keyout','-CA','-CAkey','-CAfile'].includes(last) ? pathCompletions(cur) : ['-noout','-text','-subject','-issuer','-enddate','-dates','-in','-out','-subj','-days','-CA','-CAkey','-CAcreateserial','-req','-new','-key','-newkey','-nodes','-keyout','-x509','-ext','-modulus','-CAfile'];
   if (prev[0] === 'etcdctl' || prev[0] === 'etcdutl') return prev.length === 1 ? ['snapshot','member','endpoint','version'] : prev[1] === 'snapshot' ? ['save','status','restore','/opt/etcd-backup.db'] : ['list','health'];
   if (prev[0] === 'curl') return prev.length === 1 ? S.services.map(s => s.ns === S.ctxNs ? s.name : `${s.name}.${s.ns}`) : [];
   const rel = /^(kubectl|k)$/.test(prev[0]) ? prev.slice(1) : prev;
@@ -3728,14 +4205,15 @@ function completions(prev, cur) {
   const [verb] = rel, pos = rel.filter(x => !x.startsWith('-')).length;
   const ns = S.ctxNs;
   const names = k => (LIST[k] ? listItems(k, ns) : []).map(o => o.name);
-  const KINDS = ['pods','deployments','services','nodes','namespaces','configmaps','secrets','serviceaccounts','roles','rolebindings','clusterroles','clusterrolebindings','pv','pvc','storageclasses','networkpolicies','endpoints','rs','events','all'];
+  const KINDS = ['pods','deployments','services','nodes','namespaces','configmaps','secrets','serviceaccounts','roles','rolebindings','clusterroles','clusterrolebindings','pv','pvc','storageclasses','networkpolicies','csr','endpoints','rs','events','all'];
   if (['drain','cordon','uncordon'].includes(verb)) return pos === 1 ? names('node') : [];
   if (verb === 'taint') return pos === 1 ? ['nodes'] : pos === 2 ? names('node') : ['key=value:NoSchedule','key=value:NoExecute','key=value:PreferNoSchedule'];
   if (verb === 'logs' || verb === 'exec') return pos === 1 ? [...names('pod'), ...(verb === 'logs' ? names('deployment').map(n => 'deployment/' + n) : [])] : verb === 'exec' ? ['--','env','nslookup','curl','wget','cat'] : [];
   if (['apply','replace'].includes(verb)) return ['-f'];
   if (verb === 'top') return ['nodes','pods'];
   if (verb === 'auth') return pos === 1 ? ['can-i'] : pos === 2 ? ['get','list','create','delete','update','patch','watch','--list'] : pos === 3 ? ['pods','deployments','services','secrets','configmaps','nodes','persistentvolumeclaims'] : [];
-  if (verb === 'config') return pos === 1 ? ['set-context','get-contexts','current-context','use-context','view'] : ['--current','--namespace='];
+  if (verb === 'config') return pos === 1 ? ['set-context','set-credentials','get-contexts','get-users','current-context','use-context','delete-context','view'] : prev[1] === 'use-context' || prev[1] === 'delete-context' ? Object.keys(S.kcfg.contexts) : ['--current','--namespace=','--user=','--cluster=kubernetes','--client-certificate=','--client-key=','--embed-certs=true'];
+  if (verb === 'certificate') return pos === 1 ? ['approve','deny'] : S.csrs.map(c => c.name);
   if (verb === 'rollout') return pos === 1 ? ['status','undo','history','restart'] : pos === 2 ? names('deployment').map(n => 'deployment/' + n) : [];
   if (verb === 'set') return pos === 1 ? ['image'] : pos === 2 ? names('deployment').map(n => 'deployment/' + n) : pos === 3 ? (findDep((rel[2] || '').split('/')[1], ns) ? [findDep(rel[2].split('/')[1], ns).template.container + '='] : []) : [];
   if (verb === 'create') return pos === 1 ? ['deployment','namespace','configmap','secret','serviceaccount','role','rolebinding','clusterrole','clusterrolebinding','-f'] : rel[1] === 'secret' && pos === 2 ? ['generic'] : [];
@@ -4203,6 +4681,17 @@ metadata:
   name: fast
 provisioner: rancher.io/local-path
 reclaimPolicy: Retain`,
+  'CertificateSigningRequest':`apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: jane
+spec:
+  # paste the output of: cat jane.csr | base64 | tr -d "\\n"
+  request: PASTE_BASE64_CSR_HERE
+  signerName: kubernetes.io/kube-apiserver-client
+  expirationSeconds: 86400
+  usages:
+    - client auth`,
 };
 /** Code editor body: line-number gutter, YAML auto-indent, live YAML validation. */
 const editorHTML = () => `<div class="ed"><div class="gut" aria-hidden="true"></div><textarea id="yText" spellcheck="false" wrap="off" autocapitalize="off"></textarea></div><div class="ed-status"><span id="edLint"></span><span id="edPos"></span></div>`;
@@ -4289,6 +4778,8 @@ function promptModal(title, label, value = '', okLabel = 'Create') {
    ===================================================================== */
 const ready = (name, ns = 'default') => { const d = findDep(name, ns); return !!d && depStatus(d).ready === d.replicas && depStatus(d).total === d.replicas && !d.rolling; };
 const T = c => `<code class="try">${c}</code>`;
+/** Multi-line snippet (heredoc): clicking runs it as a script. */
+const TM = c => `<code class="try multi" title="Click to run">${esc(c)}</code>`;
 const ETCD_TLS = '--cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key';
 /** Official CKA curriculum domains and exam weights. */
 const DOMAINS = {
@@ -4351,6 +4842,22 @@ const LESSONS = [
     task:`${T('kubectl create role pod-reader --verb=get,list,watch --resource=pods')}<br>${T('kubectl create rolebinding read-pods --role=pod-reader --user=jane')}<br>${T('kubectl auth can-i list pods --as=jane')} → yes · ${T('kubectl auth can-i delete pods --as=jane')} → no<br>${T('kubectl get pods --as=jane')} · ${T('kubectl get deploy --as=jane')} (Forbidden!)`,
     check:() => authorize('jane', 'list', 'pods', 'default').allowed && S.stats.canI > 0,
     why:`RBAC is <b>deny-by-default</b>. A <b>Role</b> lists verbs on resources in one namespace; a <b>RoleBinding</b> grants it to users, groups or ServiceAccounts. ClusterRole/ClusterRoleBinding do the same cluster-wide. <code>auth can-i</code> asks the API server's authorizer directly.` },
+  { d:'arch', title:'TLS lab 1 · Inspect the cluster PKI',
+    task:`Every component talks <b>mutual TLS</b>. kubeadm keeps the certificates on the control plane.<br>${T('ssh controlplane')} · ${T('ls /etc/kubernetes/pki /etc/kubernetes/pki/etcd')}<br>${T('openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -text')}<br>Just the answers: ${T('openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -subject -issuer -enddate')} · ${T('openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -ext subjectAltName')}<br>${T('kubeadm certs check-expiration')} · ${T('openssl verify -CAfile /etc/kubernetes/pki/ca.crt /etc/kubernetes/pki/apiserver.crt')}`,
+    check:() => (S.stats.x509Read || 0) > 0 && (S.stats.checkExp || 0) > 0,
+    why:`kubeadm creates three CAs: <b>ca</b> (API server, kubelets, users), <b>etcd/ca</b> (etcd peers & clients) and <b>front-proxy-ca</b>. Leaf certificates live <b>1 year</b>, CAs 10 years. The API server cert's <b>SANs</b> list every name clients may use (kubernetes.default.svc, 10.96.0.1, the node IP) — a client connecting by a name not in that list gets a TLS error.` },
+  { d:'arch', title:'TLS lab 2 · Renew an expired certificate', setup:'certs',
+    task:`Press <b>▶ Set up scenario</b>, then try ${T('kubectl get nodes')} — x509 error!<br>${T('ssh controlplane')} · ${T('kubeadm certs check-expiration')} · ${T('openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -enddate')}<br>${T('kubeadm certs renew all')} → ${T('kubectl get nodes')} <i>still fails</i>: the running API server holds the old cert.<br>Restart the static pod: ${T('mv /etc/kubernetes/manifests/kube-apiserver.yaml /tmp/')} → wait for “stops the kube-apiserver” in the panel → ${T('mv /tmp/kube-apiserver.yaml /etc/kubernetes/manifests/')}<br>${T('kubectl get nodes')} ✅ · ${T('exit')}`,
+    check:() => (S.stats.certRenewed || 0) > 0 && issuedOf('apiserver') > S.t0 && pki().served === issuedOf('apiserver') && !apiserverDown(),
+    why:`<code>kubeadm certs renew</code> only rewrites files: components load certificates <b>at start</b>, so you must restart the control-plane static pods (move the manifest out of <code>/etc/kubernetes/manifests</code> and back). <code>kubeadm upgrade apply</code> renews everything automatically — clusters that are upgraded at least yearly never hit this.` },
+  { d:'arch', title:'TLS lab 3 · New user via CSR & kubeconfig',
+    task:`Create a key and a signing request for user <b>jane</b> in group <b>dev</b>:<br>${T('openssl genrsa -out jane.key 2048')} · ${T('openssl req -new -key jane.key -subj "/CN=jane/O=dev" -out jane.csr')}<br>Submit it to the Kubernetes CSR API (click to run):<br>${TM('cat <<EOF | kubectl apply -f -\napiVersion: certificates.k8s.io/v1\nkind: CertificateSigningRequest\nmetadata:\n  name: jane\nspec:\n  request: $(cat jane.csr | base64 | tr -d "\\n")\n  signerName: kubernetes.io/kube-apiserver-client\n  expirationSeconds: 86400\n  usages:\n  - client auth\nEOF')}<br>${T('kubectl get csr')} · ${T('kubectl certificate approve jane')} · ${T("kubectl get csr jane -o jsonpath='{.status.certificate}' | base64 -d > jane.crt")}<br>${T('kubectl config set-credentials jane --client-key=jane.key --client-certificate=jane.crt --embed-certs=true')} · ${T('kubectl config set-context jane --cluster=kubernetes --user=jane')}<br>${T('kubectl create role pod-reader --verb=get,list --resource=pods')} · ${T('kubectl create rolebinding jane-read --role=pod-reader --user=jane')}<br>${T('kubectl auth whoami --context=jane')} · ${T('kubectl get pods --context=jane')} ✅ · ${T('kubectl get secrets --context=jane')} ❌`,
+    check:() => S.csrs.some(c => c.certificate) && (S.stats.certUserOk || 0) > 0,
+    why:`Kubernetes has no user database: a <b>user is whoever presents a client certificate signed by the cluster CA</b>. The certificate's <b>CN</b> becomes the username and each <b>O</b> a group — RBAC does the rest. The CSR API lets an admin issue such certificates without touching <code>ca.key</code>; approval and signing are separate steps.` },
+  { d:'net', title:'TLS lab 4 · TLS Secrets',
+    task:`Make a self-signed certificate for a web app:<br>${T('openssl req -x509 -newkey rsa:2048 -nodes -keyout tls.key -out tls.crt -days 365 -subj "/CN=web.example.com" -addext "subjectAltName=DNS:web.example.com"')}<br>${T('openssl x509 -in tls.crt -noout -subject -issuer -dates')} (self-signed: subject = issuer)<br>${T('kubectl create secret tls web-tls --cert=tls.crt --key=tls.key')} · ${T('kubectl describe secret web-tls')}<br>Break it on purpose: ${T('openssl genrsa -out other.key 2048')} · ${T('kubectl create secret tls bad --cert=tls.crt --key=other.key')}`,
+    check:() => S.secrets.some(s => s.type === 'kubernetes.io/tls'),
+    why:`A <b>kubernetes.io/tls</b> Secret holds exactly two keys, <code>tls.crt</code> and <code>tls.key</code>, and kubectl checks that the key matches the certificate. Ingress controllers and Gateways reference it to terminate HTTPS. Compare keys yourself with <code>openssl x509 -noout -modulus</code> vs <code>openssl rsa -noout -modulus</code>.` },
   { d:'net', title:'DNS & NetworkPolicies',
     task:`${T('kubectl create deployment api --image=nginx')} · ${T('kubectl expose deployment api --port=80')}<br>${T('kubectl run frontend --image=busybox --labels=role=frontend')} · ${T('kubectl run other --image=busybox')}<br>${T('kubectl exec frontend -- nslookup api')} · ${T('kubectl exec other -- wget -qO- api')}<br>Apply "NetworkPolicy (default deny)", retry, then "NetworkPolicy (allow frontend → api)" and test both pods again.`,
     check:() => S.netpols.length > 0 && S.stats.npBlocked > 0 && [...(S.stats.podCurl || [])].some(x => x.includes('/frontend->')),
@@ -4394,6 +4901,12 @@ async function setupScenario(kind) {
   beginTrace('▶ Scenario set up');
   if (kind === 'config') return step(`A teammate deployed <b>checkout</b>, which loads its settings from ConfigMap <code>checkout-config</code>… 🤔`, [['client','api',C.req],['api','etcd',C.write]],
     () => { if (!findDep('checkout', 'default')) S.deployments.push(makeDeployment({ name:'checkout', ns:'default', image:'nginx:1.27', replicas:2, extra:{ envFrom:[{ kind:'configmap', name:'checkout-config' }] } })); });
+  if (kind === 'certs') return step(`⏳ Time warp: this cluster was installed <b>a year ago</b> and nobody renewed its certificates. The <b>kube-apiserver</b> serving certificate has just <b>expired</b>, the others expire within days… 🤔`, [['api', 'kubectl', C.del]], () => {
+    const k = pki(), t = now();
+    for (const n of [...Object.keys(CERT_LEAVES), ...Object.keys(KUBECONFIG_CERTS)]) k.issued[n] = t - 356 * DAY;
+    k.issued.apiserver = k.served = t - 366 * DAY;
+    if (S.fs.controlplane) Object.assign(S.fs.controlplane, pkiFiles());
+  });
   const n = findNode('node-2') || S.nodes.find(x => x.ready);
   if (!n) return print('No node available for this scenario — add one with ＋.', 'err');
   return step(`Someone "tuned" the kubelet config on <b>${n.name}</b> and restarted it… 🤔`, [['kubelet:' + n.name, 'rt:' + n.name, C.del]], () => {
@@ -4439,7 +4952,7 @@ function openLessonMenu() {
   document.querySelectorAll('[data-lesson]').forEach(el => el.onclick = () => { closeModal(); showLesson(+el.dataset.lesson); });
   $('#startExam').onclick = () => { closeModal(); startExam(); };
 }
-$('#lesson').addEventListener('click', e => { const t = e.target.closest('code.try'); if (t) { cmdEl.value = t.textContent.replace(/<.*?>/, ''); cmdEl.focus(); } });
+$('#lesson').addEventListener('click', e => { const t = e.target.closest('code.try'); if (!t) return; if (t.classList.contains('multi')) return runCmd(t.textContent); cmdEl.value = t.textContent.replace(/<.*?>/, ''); cmdEl.focus(); });
 $('#lClose').onclick = () => { lessonIdx = -1; $('#lesson').classList.add('hidden'); };
 $('#lPrev').onclick = () => lessonIdx > 0 && showLesson(lessonIdx - 1);
 $('#lNext').onclick = () => lessonIdx < LESSONS.length - 1 && showLesson(lessonIdx + 1);
@@ -4543,6 +5056,7 @@ const CHEATS = [
   ['Networking', ['k expose deploy web --port=80 --type=NodePort', 'k get endpoints web', 'k exec POD -- nslookup web', 'k exec POD -- wget -qO- web.default.svc.cluster.local', 'curl web 5']],
   ['Cluster ops', ['ssh controlplane', 'etcdctl snapshot save /opt/backup.db --endpoints=https://127.0.0.1:2379 ' + ETCD_TLS, 'etcdctl snapshot status /opt/backup.db -w table', 'etcdctl snapshot restore /opt/backup.db --data-dir=/var/lib/etcd-new', 'vi /etc/kubernetes/manifests/etcd.yaml', 'kubeadm upgrade plan', 'kubeadm token create --print-join-command', 'kubeadm certs check-expiration']],
   ['Files & YAML', ['ls -la', 'cd examples', 'tree ~', 'mkdir -p ~/cka && cp ~/examples/*.yaml ~/cka/', "sed -i 's/replicas: 3/replicas: 5/' ~/cka/deployment-service.yaml", 'diff ~/examples/deployment-service.yaml ~/cka/deployment-service.yaml', 'kubectl apply -f ~/cka/', 'grep -rn image: ~/cka', "find / -name '*.yaml'", 'cat ~/examples/static-pod.yaml | kubectl apply -f -']],
+  ['TLS & certificates', ['openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -text', 'openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -subject -issuer -enddate', 'openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -ext subjectAltName', 'kubeadm certs check-expiration', 'kubeadm certs renew all', 'openssl genrsa -out jane.key 2048', 'openssl req -new -key jane.key -subj "/CN=jane/O=dev" -out jane.csr', 'cat jane.csr | base64 | tr -d "\\n"', 'k get csr', 'k certificate approve jane', "k get csr jane -o jsonpath='{.status.certificate}' | base64 -d > jane.crt", 'k config set-credentials jane --client-key=jane.key --client-certificate=jane.crt --embed-certs=true', 'k config set-context jane --cluster=kubernetes --user=jane', 'k auth whoami --context=jane', 'k create secret tls web-tls --cert=tls.crt --key=tls.key', 'openssl verify -CAfile /etc/kubernetes/pki/ca.crt jane.crt']],
   ['Node troubleshooting', ['ssh node-1', 'systemctl status kubelet', 'journalctl -u kubelet', 'cat /var/lib/kubelet/config.yaml', 'grep staticPodPath /var/lib/kubelet/config.yaml', 'ls /etc/kubernetes/manifests', 'systemctl restart kubelet', 'crictl ps', 'exit']],
 ];
 function renderDocs() {
